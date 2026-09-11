@@ -1,7 +1,7 @@
 # dsh-prompt-polish
 
-[![CI](https://github.com/<your-account>/dsh-prompt-polish/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-account>/dsh-prompt-polish/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/dsh-prompt-polish)](https://www.npmjs.com/package/dsh-prompt-polish)
+[![CI](https://github.com/xyavid/dsh-prompt-polish/actions/workflows/ci.yml/badge.svg)](https://github.com/xyavid/dsh-prompt-polish/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@xyavid/dsh-prompt-polish)](https://www.npmjs.com/package/@xyavid/dsh-prompt-polish)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![dsh](https://img.shields.io/badge/dsh-%3E%3D0.1.5--rc.1-4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
 
@@ -96,29 +96,29 @@ dsh plugin --profile web add link:C:\path\to\dsh-prompt-polish
 `allowBuilds` prompt — a git install only checks out files:
 
 ```bash
-dsh plugin --profile web add github:<your-account>/dsh-prompt-polish
+dsh plugin --profile web add github:xyavid/dsh-prompt-polish
 # pin a commit for reproducibility:
-dsh plugin --profile web add github:<your-account>/dsh-prompt-polish#<sha>
+dsh plugin --profile web add github:xyavid/dsh-prompt-polish#<sha>
 ```
 
 **From a tarball** (no build environment needed):
 
 
 ```bash
-pnpm pack                        # produces dsh-prompt-polish-0.2.0.tgz
-dsh plugin --profile web add ./dsh-prompt-polish-0.2.0.tgz
+pnpm pack                        # produces xyavid-dsh-prompt-polish-0.2.0.tgz
+dsh plugin --profile web add ./xyavid-dsh-prompt-polish-0.2.0.tgz
 ```
 
 **From npm** (once published):
 
 ```bash
-dsh plugin --profile web add dsh-prompt-polish
+dsh plugin --profile web add @xyavid/dsh-prompt-polish
 ```
 
 **Uninstall:**
 
 ```bash
-dsh plugin --profile web remove dsh-prompt-polish
+dsh plugin --profile web remove @xyavid/dsh-prompt-polish
 # then restart dsh web
 ```
 

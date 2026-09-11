@@ -1,7 +1,7 @@
 # dsh-prompt-polish
 
-[![CI](https://github.com/<your-account>/dsh-prompt-polish/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-account>/dsh-prompt-polish/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/dsh-prompt-polish)](https://www.npmjs.com/package/dsh-prompt-polish)
+[![CI](https://github.com/xyavid/dsh-prompt-polish/actions/workflows/ci.yml/badge.svg)](https://github.com/xyavid/dsh-prompt-polish/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@xyavid/dsh-prompt-polish)](https://www.npmjs.com/package/@xyavid/dsh-prompt-polish)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![dsh](https://img.shields.io/badge/dsh-%3E%3D0.1.5--rc.1-4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
 
@@ -91,28 +91,28 @@ dsh plugin --profile web add link:C:\path\to\dsh-prompt-polish
 **从 GitHub 直装**。`lib/` 已提交，因此不会触发构建，也不会触发 pnpm 的 `allowBuilds` 拦截：
 
 ```bash
-dsh plugin --profile web add github:<your-account>/dsh-prompt-polish
+dsh plugin --profile web add github:xyavid/dsh-prompt-polish
 # 需要可复现时锁定 commit：
-dsh plugin --profile web add github:<your-account>/dsh-prompt-polish#<sha>
+dsh plugin --profile web add github:xyavid/dsh-prompt-polish#<sha>
 ```
 
 **从 tarball 安装**（不需要构建环境）：
 
 ```bash
-pnpm pack                        # 产出 dsh-prompt-polish-0.2.0.tgz
-dsh plugin --profile web add ./dsh-prompt-polish-0.2.0.tgz
+pnpm pack                        # 产出 xyavid-dsh-prompt-polish-0.2.0.tgz
+dsh plugin --profile web add ./xyavid-dsh-prompt-polish-0.2.0.tgz
 ```
 
 **从 npm 安装**（发布后）：
 
 ```bash
-dsh plugin --profile web add dsh-prompt-polish
+dsh plugin --profile web add @xyavid/dsh-prompt-polish
 ```
 
 **卸载：**
 
 ```bash
-dsh plugin --profile web remove dsh-prompt-polish
+dsh plugin --profile web remove @xyavid/dsh-prompt-polish
 # 然后重启 dsh web
 ```
 

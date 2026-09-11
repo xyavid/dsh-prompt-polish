@@ -5,7 +5,7 @@
 # 用户在 ~/.dsh/settings.yaml 的 prompt-polish: 段里的值会覆盖它，保存即生效。
 - insert:
     - id: prompt-polish
-      name: dsh-prompt-polish
+      name: '@xyavid/dsh-prompt-polish'
       config:
         enabled: true
         temperature: 0.3

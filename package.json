@@ -1,10 +1,9 @@
 {
-  "name": "dsh-prompt-polish",
+  "name": "@xyavid/dsh-prompt-polish",
   "version": "0.2.0",
   "description": "dsh Web 插件：在输入框模型名左侧加一个小星星按钮，一键把当前草稿交给模型改写成结构化提示词，可一键撤回。",
   "type": "module",
   "main": "lib/index.js",
-  "types": "lib/index.d.ts",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
@@ -39,7 +38,8 @@
     "test": "node test/harness.mjs && node test/undo-window.test.mjs",
     "verify:lib": "node scripts/verify-lib.mjs",
     "check": "pnpm run build && pnpm run typecheck && pnpm run test && pnpm run verify:lib",
-    "prepare": "node scripts/build.mjs"
+    "prepare": "node scripts/build.mjs",
+    "prepublishOnly": "pnpm run check"
   },
   "keywords": [
     "deepseek-harness",
@@ -51,9 +51,11 @@
     "web-ui"
   ],
   "license": "MIT",
+  "author": "xyavid <xyun3525@gmail.com>",
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
+  "packageManager": "pnpm@10.29.3",
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh-host-webserver": "^0.1.5-rc.1",
@@ -83,10 +85,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/<your-account>/dsh-prompt-polish.git"
+    "url": "git+https://github.com/xyavid/dsh-prompt-polish.git"
   },
   "bugs": {
-    "url": "https://github.com/<your-account>/dsh-prompt-polish/issues"
+    "url": "https://github.com/xyavid/dsh-prompt-polish/issues"
   },
-  "homepage": "https://github.com/<your-account>/dsh-prompt-polish#readme"
+  "homepage": "https://github.com/xyavid/dsh-prompt-polish#readme",
+  "publishConfig": {
+    "access": "public"
+  }
 }
