@@ -1,0 +1,7 @@
+# 预构建产物：插件运行必需，随仓库提交，但不参与 GitHub 语言统计
+lib/*.js linguist-generated=true
+lib/** linguist-generated=true
+
+# 统一换行符
+* text=auto eol=lf
+*.cmd text eol=crlf

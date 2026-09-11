@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # postinstall runs "prepare"; skip it here so the committed lib/ is what gets verified.
+      - run: pnpm install --ignore-scripts
+
+      # Fails when the committed lib/ differs from a fresh build of src/.
+      - run: pnpm run verify:lib
+
+      - run: pnpm run typecheck
+
+      # Rebuild in place, then exercise the offline regression against that build.
+      - run: pnpm run build
+      - run: pnpm test

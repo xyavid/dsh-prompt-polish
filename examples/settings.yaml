@@ -1,0 +1,15 @@
+# 设置命名空间示例：本插件的用户层设置。
+# 直接编辑 ~/.dsh/settings.yaml 里的同名段落即可，保存后即时生效
+# （插件以 applies: 'live' 注册命名空间）。
+prompt-polish:
+  enabled: true
+  # 保守 / 均衡 / 激进
+  strength: balanced
+  temperature: 0.3
+  maxOutputTokens: 2048
+  maxInputChars: 12000
+  timeoutMs: 60000
+  # 留空使用内置优化策略；非空时按 strategyMode 决定替换还是追加
+  systemPrompt: ''
+  strategyMode: extend-default
+  undoWindowMs: 60000

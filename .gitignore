@@ -1,0 +1,20 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 本地/编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# 产物同步校验的临时目录
+.verify-lib-*/
+
+# 一次性调试脚本（正式回归只保留 test/harness.mjs）
+test/probe*.mjs
+test/dom-shape.mjs
+test/browser-probe.mjs
+test/launch-edge.cmd
+test/run-probe.cmd

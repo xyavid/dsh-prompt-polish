@@ -1,0 +1,16 @@
+# 用户层补丁：覆盖插件的组合配置（不需要动插件代码）。
+# 放到 ~/.dsh/profiles/web/cordis.patch.yml（保存即热重载），或
+# ~/.dsh/cordis.patch.yml（对所有 profile 生效）。
+#
+# 注意：补丁对 config 是【整体替换】——这里只写想改的键也可以，
+# 未写的键会由插件 schema 的默认值补上（因为本插件的 schema 每个字段都有 default）。
+- id: prompt-polish
+  config:
+    enabled: true
+    strength: aggressive
+    maxOutputTokens: 3072
+    timeoutMs: 90000
+
+# 想临时停用插件时，用 disabled（config 里没有能停用一行的字段）：
+# - id: prompt-polish
+#   disabled: true

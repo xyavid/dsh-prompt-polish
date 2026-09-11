@@ -1,0 +1,14 @@
+# dsh-prompt-polish 的组合层：把插件行插进 profile 的名册。
+# 由 package.json 的 dsh.bundle.patch 声明，dsh plugin add 后自动入层叠。
+#
+# 这里写下的 config 是设置命名空间 "prompt-polish" 的 base 层：
+# 用户在 ~/.dsh/settings.yaml 的 prompt-polish: 段里的值会覆盖它，保存即生效。
+- insert:
+    - id: prompt-polish
+      name: dsh-prompt-polish
+      config:
+        enabled: true
+        temperature: 0.3
+        maxOutputTokens: 2048
+        timeoutMs: 60000
+        maxInputChars: 12000

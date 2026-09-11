@@ -1,0 +1,12 @@
+# 临时覆盖层：不改 profile、不装包，直接把本插件挂进 web 组合调试。
+#
+# 用法（注意：--patch 是【启动器】flag，必须放在 app 自己的 flag 之前）：
+#   dsh --profile web --patch ./examples/user-overlay.cordis.yml --port 3199 --no-open
+#
+# 这样启动的实例只用于验证；要长期使用请用 dsh plugin add 安装成 bundle。
+- insert:
+    - id: prompt-polish
+      name: 'C:/absolute/path/to/dsh-prompt-polish/lib/index.js'
+      config:
+        enabled: true
+        strength: balanced
