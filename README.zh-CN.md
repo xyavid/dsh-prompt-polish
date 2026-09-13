@@ -23,8 +23,7 @@
 |---|---|
 | ✨ **输入框按钮** | 位于工具行、模型名紧邻左侧的小星星；随行自适应，始终在手边 |
 | 🔁 **一键三态** | 空闲（星星）→ 点击开始优化；进行中（转圈）→ 点击取消；完成（撤回箭头）→ 点击还原原文。不弹面板、不加提示条 |
-| 🧠 **用你当前的模型** | 调用走 `ctx.llm`，路由就是你会话正在用的那条——不需要再配一个模型，也不需要单独的密钥 |
-| 🧩 **路由兜底链** | 会话已用的路由 → 跨进程默认模型（`agent-default-model`）；非浏览器调用方也可显式传路由 |
+| 🧠 **用你当前的模型** | 调用走 `ctx.llm`，路由就是你会话正在用的那条，兜底到跨进程默认模型（`agent-default-model`）——不需要再配一个模型，也不需要单独的密钥 |
 | 🔑 **零凭据配置** | 调用走 harness LLM 服务，密钥来自 harness 凭据库，且只在宿主进程使用 |
 | 🛡️ **草稿安全** | 空输入、只有附件、超长、含命令/引用 chip 的草稿一律提前拒绝；任何失败都不会改动你已经写下的内容 |
 | ↩️ **两种撤回** | 原生 `Ctrl+Z`（写回走官方编辑器接口）＋ 按钮自身的撤回态 |
@@ -35,6 +34,22 @@
 
 > **本版 UI 文案只有中文**（按钮悬停如 `优化提示词` / `取消优化` / `撤回优化`，以及本地守卫提示）。
 > 接入 harness 的 locale 命名空间做中英字典在计划中；设置页的字段描述也是中文，因为那是由 schema 渲染的。
+>
+> 截图见下方[功能展示](#功能展示)；各构建上做过哪些实测记录在 [docs/compatibility.md](./docs/compatibility.md)。
+
+## 功能展示
+
+**按钮就位。** 小星星按钮位于工具行、模型名紧邻左侧，优化全程不离开你正在写的草稿。
+
+![工具行里的优化按钮](./image/界面按钮展示.png)
+
+**优化前。** 一行随手记的草稿，而不是任务说明：目标、约束与验收标准都还是隐含的。
+
+![优化前：输入框里的原始草稿](./image/示例润色前.png)
+
+**优化后。** 点一下即改写成结构化的可执行提示词并写回输入框，按钮随即变成撤回箭头。
+
+![优化后：改写结果已写回输入框](./image/示例润色后.png)
 
 ## 工作原理
 
@@ -71,13 +86,18 @@ flowchart LR
 
 ## 安装
 
-**从本地检出安装（当前推荐）**。构建产物 `lib/` 已随仓库提交，安装方不需要构建：
+**从 npm 安装（推荐）**。发布出去的 tarball 里已含构建产物 `lib/`，且从 registry 安装不会执行生命周期脚本：
 
 ```bash
-git clone <本仓库> dsh-prompt-polish
+dsh plugin --profile web add @xyavid/dsh-prompt-polish
+```
+
+**从本地检出安装**。构建产物 `lib/` 已随仓库提交，检出后可直接使用：
+
+```bash
+git clone https://github.com/xyavid/dsh-prompt-polish.git
 cd dsh-prompt-polish
 dsh plugin --profile web add .
-# 然后重启 dsh web（或桌面应用）——bundle 列表在进程启动时确定
 ```
 
 若要边改边调试，先构建再以 link 方式挂载：
@@ -88,25 +108,26 @@ pnpm run build
 dsh plugin --profile web add link:C:\path\to\dsh-prompt-polish
 ```
 
-**从 GitHub 直装**。`lib/` 已提交，因此不会触发构建，也不会触发 pnpm 的 `allowBuilds` 拦截：
-
-```bash
-dsh plugin --profile web add github:xyavid/dsh-prompt-polish
-# 需要可复现时锁定 commit：
-dsh plugin --profile web add github:xyavid/dsh-prompt-polish#<sha>
-```
-
-**从 tarball 安装**（不需要构建环境）：
+**从 tarball 安装**。不需要构建环境：
 
 ```bash
 pnpm pack                        # 产出 xyavid-dsh-prompt-polish-0.2.0.tgz
 dsh plugin --profile web add ./xyavid-dsh-prompt-polish-0.2.0.tgz
 ```
 
-**从 npm 安装**（发布后）：
+**从 GitHub 直装**。本包声明了 `prepare` 脚本，而 pnpm ≥ 10 默认拦截依赖的构建脚本，因此 git 安装必须先放行，
+否则 pnpm 会以 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` 中止。在 profile 目录的 `pnpm-workspace.yaml`
+（`$DSH_HOME/profiles/web/`）中加入：
+
+```yaml
+onlyBuiltDependencies:
+  - "@xyavid/dsh-prompt-polish"
+```
 
 ```bash
-dsh plugin --profile web add @xyavid/dsh-prompt-polish
+dsh plugin --profile web add github:xyavid/dsh-prompt-polish
+# 需要可复现时锁定 commit：
+dsh plugin --profile web add github:xyavid/dsh-prompt-polish#<sha>
 ```
 
 **卸载：**
@@ -184,11 +205,7 @@ dsh plugin --profile web remove @xyavid/dsh-prompt-polish
 
 | 情况 | 行为 |
 |---|---|
-| 空 / 纯空白草稿 | 本地拒绝并给悬停提示；宿主路由也会拒绝 |
-| 只有附件没有正文 | 拒绝——优化会毁掉 chip |
-| 含 `/命令` 或 `@引用` chip | 本地拒绝（填回会毁掉 chip） |
-| 超过 `maxInputChars` | 带确切计数拒绝；**绝不自动截断** |
-| 输入机处于非 `plain` 状态（提交中 / claimed / adjudicating） | 拒绝，提示"当前输入状态不允许优化" |
+| 本地守卫拒绝草稿（空或纯空白、只有附件、含 `/命令` 或 `@引用` chip、超过 `maxInputChars`、或输入机不在 `plain` 状态） | 在发起请求前就由浏览器半拒绝；宿主路由另会复核空值与长度。每条守卫的悬停文案见下表 |
 | 调用期间编辑了草稿 | 丢弃结果、不写回，按钮回到空闲 |
 | 调用期间按了发送 | 宿主路由检测到断开并中止模型调用，原文照常发出 |
 | 超时 | 映射为带配置秒数的超时提示；可重试 |
@@ -235,12 +252,16 @@ dsh-prompt-polish/
 │   └── client/
 │       ├── index.tsx     浏览器半：三态按钮、撤回、插槽注册、运行时诊断
 │       └── styles.ts     按钮样式（一次性注入 <style>）
-├── scripts/build.mjs     esbuild：宿主 ESM + 浏览器半（模块加载器信封）
-├── test/harness.mjs      离线回归：加载 client bundle 并断言"恰好一个按钮渲染"
+├── scripts/
+│   ├── build.mjs         esbuild：宿主 ESM + 浏览器半（模块加载器信封）
+│   └── verify-lib.mjs    在临时目录重新构建，并与提交的 lib/ 逐字节比对
+├── test/
+│   ├── harness.mjs       离线回归：加载 client bundle 并断言"恰好一个按钮渲染"
+│   └── undo-window.test.mjs  jsdom 回归：撤回窗口的读取、过期与还原
 ├── types/contract.ts     针对官方 d.ts 的编译期契约断言
 ├── docs/compatibility.md 接口核对、实测结论、已知边界
 ├── examples/             overlay / 用户补丁 / 设置示例
-└── lib/                  随仓库提交的构建产物（插件运行必需；GitHub 安装不构建）
+└── lib/                  随仓库提交的构建产物；随包发布，启动时加载
 ```
 
 **数据流**
@@ -295,9 +316,9 @@ copy(JSON.stringify(globalThis.__dshPromptPolish))
 |---|---|
 | 按钮不出现 | 没重启进程（bundle 列表在启动时确定）；`enabled` 为 false；或没跑 `pnpm run build`，缺 `lib/client.js` |
 | 按钮出现两个 | `0.2.0` 之前的版本会同时注册多个插槽；升级到 `0.2.x` 并重启 |
-| 提示"优化期间草稿已改动，结果未采用" | 调用期间你编辑了输入框；结果绝不覆盖更新的输入，重新点一次即可 |
-| 提示"未找到可用模型" | 会话从未选过模型且没有默认模型；在模型菜单里选一次 |
-| 提示"被 token 上限截断" | 调大 `maxOutputTokens` 或缩短原文 |
+| 提示 `优化期间草稿已改动，结果未采用` | 调用期间你编辑了输入框；结果绝不覆盖更新的输入，重新点一次即可 |
+| 提示 `无法确定使用哪个模型：请先在会话里选择模型` | 会话从未选过模型且没有默认模型；在模型菜单里选一次 |
+| 提示 `优化结果在 token 上限处被截断…` | 调大 `maxOutputTokens` 或缩短原文 |
 | 启动时插件加载失败 | 启动输出里有原始栈；常见原因是缺 `lib/` 产物，或组合里没有 `llm` / `settings` |
 | 设置页看不到 prompt-polish | 该 profile 没有设置提供方（`dsh-settings-file`，由 `dsh-base` 提供），或插件层没进 `dsh.profile.bundles` |
 | 按钮在，但调用报供应商错误 | 悬停里是供应商原始信息；通常是 harness 凭据库里的密钥或额度问题 |

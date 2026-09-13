@@ -7,7 +7,17 @@
 ### 计划中
 
 - 接入 harness locale 命名空间，让按钮与错误文案支持中英双语。
-- 补工具行截图与三态演示（`docs/evidence-*.png`）。
+
+### 文档
+
+- README（中/英）新增「功能展示」章节，嵌入工具行按钮与「优化前 / 优化后」三张截图（`image/`）。
+- 校订 README（中/英）中与实现不符或已过时的描述：构建戳记是源码内容哈希而非时间戳、撤回窗口经设置镜像读取 `undoWindowMs` 并在读不到时以 60 秒兜底、`pnpm run check` 包含 `verify:lib`、目录树补上 `scripts/verify-lib.mjs` 与 `test/undo-window.test.mjs`、排错表改引真实的中文提示文案。
+- 修正安装章节：优先推荐从 npm 安装，替换仓库占位符为真实地址，并说明 GitHub 直装需先放行 `prepare`（pnpm ≥ 10 会拦截，见下）。
+
+### 变更
+
+- GitHub 直装的真实行为：pnpm ≥ 10 默认拦截依赖构建脚本，未在 profile 的 `pnpm-workspace.yaml` 中通过 `onlyBuiltDependencies` 放行时会以 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` 失败。
+- `package.json` 的 `files` 白名单加入 `image/`，使 README 截图在 npm 页面同样可显示（随下次发版生效）。
 
 ## [0.2.0] — 2026-09-11
 

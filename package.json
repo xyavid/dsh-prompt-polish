@@ -25,6 +25,7 @@
   },
   "files": [
     "lib",
+    "image",
     "cordis.patch.yml",
     "README.md",
     "README.zh-CN.md",

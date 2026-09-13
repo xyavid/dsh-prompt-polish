@@ -23,8 +23,7 @@ Nothing about your intent changes: the strategy is allowed to make the ask clear
 |---|---|
 | ✨ **Composer button** | A small sparkle button in the composer tool row, immediately left of the model name — always at hand, and it reflows with the row |
 | 🔁 **Three states, one button** | Idle (sparkle) → click to polish. Running (spinner) → click to cancel. Done (undo arrow) → click to restore the original draft. No extra panels, bars, or dialogs |
-| 🧠 **Your session's model** | The call goes through `ctx.llm` with the route your session already uses — no second model to configure, no separate key |
-| 🧩 **Model route fallback chain** | The route your session already uses, falling back to the harness-wide default model (`agent-default-model`); non-browser callers may also send an explicit route |
+| 🧠 **Your session's model** | The call goes through `ctx.llm` on the route your session already uses, falling back to the harness-wide default model (`agent-default-model`) — no second model to configure, no separate key |
 | 🔑 **Zero credential setup** | Calls ride the harness LLM service; keys come from the harness credential store and are used host-side only |
 | 🛡️ **Draft safety** | Empty, attachment-only, over-length, and command/reference-chip drafts are refused up front; a failed call never modifies what you typed |
 | ↩️ **Two kinds of undo** | Native `Ctrl+Z` (the write goes through the official editor API) and the button's own undo state |
@@ -37,8 +36,22 @@ Nothing about your intent changes: the strategy is allowed to make the ask clear
 > and the local-guard hints). Hooking into the harness locale namespace for zh/en dictionaries is on the
 > roadmap; the settings section itself is described in Chinese because it renders the schema descriptions.
 
-> Screenshots are on the way (`docs/evidence-*.png`): the composer row with the button in all three states.
-> Until then, `docs/compatibility.md` records what was field-verified on which build.
+> Screenshots are in [Feature showcase](#feature-showcase) below; `docs/compatibility.md` records what
+> was field-verified on which build.
+
+## Feature showcase
+
+**The button, in place.** The sparkle button lives in the composer tool row, immediately left of the model name, so polishing never takes you away from the draft you are writing.
+
+![The polish button in the composer tool row](./image/界面按钮展示.png)
+
+**Before.** A quick note rather than a task brief: the goal, the constraints, and the acceptance criteria are all left implicit.
+
+![A rough draft in the composer before polishing](./image/示例润色前.png)
+
+**After.** One click rewrites it into a structured, actionable prompt and writes the result straight back into the composer; the button then turns into the undo arrow.
+
+![The polished prompt written back into the composer](./image/示例润色后.png)
 
 ## How it works
 
@@ -75,16 +88,22 @@ The host half declares `inject: ['llm', 'settings']`; `webServer`, `sessions`, a
 
 ## Install
 
-**From a local checkout (recommended for now).** The built `lib/` is committed, so installing does not require a build on the consumer side:
+**From npm (recommended).** The published tarball already contains the built `lib/`, and registry
+installs run no lifecycle scripts:
 
 ```bash
-git clone <this repo> dsh-prompt-polish
-cd dsh-prompt-polish
-dsh plugin --profile web add .
-# restart dsh web (or the desktop app) — the bundle list is fixed at process start
+dsh plugin --profile web add @xyavid/dsh-prompt-polish
 ```
 
-If you want to develop against it, build first and link the checkout instead:
+**From a local checkout.** The built `lib/` is committed, so a checkout is usable as-is:
+
+```bash
+git clone https://github.com/xyavid/dsh-prompt-polish.git
+cd dsh-prompt-polish
+dsh plugin --profile web add .
+```
+
+To develop against a live checkout, build first and link the directory instead:
 
 ```bash
 pnpm install
@@ -92,27 +111,27 @@ pnpm run build
 dsh plugin --profile web add link:C:\path\to\dsh-prompt-polish
 ```
 
-**From GitHub.** The built `lib/` is committed, so there is no build step and no pnpm
-`allowBuilds` prompt — a git install only checks out files:
-
-```bash
-dsh plugin --profile web add github:xyavid/dsh-prompt-polish
-# pin a commit for reproducibility:
-dsh plugin --profile web add github:xyavid/dsh-prompt-polish#<sha>
-```
-
-**From a tarball** (no build environment needed):
-
+**From a tarball.** No build environment needed:
 
 ```bash
 pnpm pack                        # produces xyavid-dsh-prompt-polish-0.2.0.tgz
 dsh plugin --profile web add ./xyavid-dsh-prompt-polish-0.2.0.tgz
 ```
 
-**From npm** (once published):
+**From GitHub.** The package declares a `prepare` script, and pnpm >= 10 blocks dependency build
+scripts by default, so a git install has to be allowlisted first; without it pnpm aborts with
+`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`. Add this to the profile's `pnpm-workspace.yaml`
+(`$DSH_HOME/profiles/web/`):
+
+```yaml
+onlyBuiltDependencies:
+  - "@xyavid/dsh-prompt-polish"
+```
 
 ```bash
-dsh plugin --profile web add @xyavid/dsh-prompt-polish
+dsh plugin --profile web add github:xyavid/dsh-prompt-polish
+# or pin a commit for reproducibility:
+dsh plugin --profile web add github:xyavid/dsh-prompt-polish#<sha>
 ```
 
 **Uninstall:**
@@ -147,7 +166,7 @@ Type a draft, then click the sparkle button left of the model name.
 
 - Pressing send while a polish is running cancels the call and sends your original text.
 - Editing the draft while a polish is running means the result is **not** written back; the button returns to idle and the hover text explains why.
-- The undo affordance expires after `undoWindowMs` (default 60 s); the client keeps a 60 s window regardless of that setting for now (see Known limitations).
+- The undo affordance expires after `undoWindowMs` (default 60 s). The button reads that value through the client settings mirror, and falls back to 60 s when the mirror is unavailable (see Known limitations).
 - Only one polish runs at a time per session, and a late response from a cancelled call is discarded.
 
 ## Configuration
@@ -199,11 +218,7 @@ falling back to the harness default".
 
 | Case | Behaviour |
 |---|---|
-| Empty / whitespace-only draft | Refused locally with a tooltip; the route refuses it too |
-| Attachment-only draft (no text) | Refused — polishing would destroy the chips |
-| Draft contains `/command` or `@reference` chips | Refused locally (fill-back would destroy the chips) |
-| Draft over `maxInputChars` | Refused with the exact counts; **never auto-truncated** |
-| Composer in a non-`plain` phase (submitting, claimed, adjudicating) | Refused with "the current input state does not allow polishing" |
+| A local guard rejects the draft (empty or whitespace-only, attachment-only, `/command` or `@reference` chips, over `maxInputChars`, or a composer outside the `plain` phase) | Refused in the browser before any request is sent; the host route re-checks emptiness and length. The exact hover text per guard is listed below |
 | Draft edited during the call | Result discarded, no write-back, button returns to idle |
 | Send pressed during the call | The host route sees the disconnect, aborts the model call, and your original text is sent |
 | Timeout | Mapped to a timeout message naming the configured seconds; retryable |
@@ -250,12 +265,16 @@ dsh-prompt-polish/
 │   └── client/
 │       ├── index.tsx     browser half: three-state button, undo, slot registration, diagnostics
 │       └── styles.ts     button stylesheet (single injected <style>)
-├── scripts/build.mjs     esbuild: host ESM + browser half inside the module-loader envelope
-├── test/harness.mjs      offline regression: loads the client bundle and asserts exactly one button renders
+├── scripts/
+│   ├── build.mjs         esbuild: host ESM + browser half inside the module-loader envelope
+│   └── verify-lib.mjs    rebuilds in a temp dir and byte-compares against the committed lib/
+├── test/
+│   ├── harness.mjs       offline regression: loads the client bundle and asserts exactly one button renders
+│   └── undo-window.test.mjs  jsdom regression for the undo window: settings read, expiry, restore
 ├── types/contract.ts     compile-time assertions against the official d.ts files
 ├── docs/compatibility.md interface audit, field-tested conclusions, known boundaries
 ├── examples/             overlay / user patch / settings examples
-└── lib/                  committed build output (the plugin needs it; GitHub installs run no build)
+└── lib/                  committed build output; ships in the tarball and is loaded at startup
 ```
 
 **Data flow**
@@ -288,7 +307,8 @@ pnpm run build       # lib/index.js (host ESM) + lib/client.js (browser half)
 pnpm run watch       # incremental rebuild
 pnpm run typecheck   # interface contract check against the official d.ts files
 pnpm test            # offline regression: the client bundle renders exactly one button
-pnpm run check       # build + typecheck + test
+pnpm run check       # build + typecheck + test + verify:lib
+pnpm run verify:lib  # fails when the committed lib/ differs from a fresh build
 ```
 
 After a build: **restart dsh web** (host-half changes and the client bundle are both read at startup), then reload the page.
@@ -296,7 +316,7 @@ After a build: **restart dsh web** (host-half changes and the client bundle are 
 **Two build constraints worth knowing**
 
 1. The browser half **must** use the automatic JSX runtime (`jsx: 'automatic'` in `scripts/build.mjs`). esbuild's classic runtime emits a reference to a global `React` that the module loader never provides; the shell then silently swallows the resulting `React is not defined`, and the symptom is "registration succeeds but no button ever appears".
-2. The build stamps a timestamp into the client bundle so the served `rev` changes on every build — without it a browser can keep running a stale bundle.
+2. The build stamps a **source content hash** — not a timestamp — into both bundles. Identical sources produce byte-identical output, which is what makes `verify:lib` meaningful; any source change alters the hash, so the served `rev` changes and a browser cannot keep serving a stale bundle.
 
 **Runtime diagnostics**
 
@@ -312,9 +332,9 @@ copy(JSON.stringify(globalThis.__dshPromptPolish))
 |---|---|
 | Button missing | The process was not restarted (the bundle list is fixed at startup); `enabled` is false; or `lib/client.js` is missing because `pnpm run build` never ran |
 | Two buttons | A version before the "try slots one by one, register once" fix; update to `0.2.x` |
-| "Optimization skipped: draft changed" | You edited the composer during the call; the result is never written over newer input — polish again |
-| "No model resolved" | The session never selected a model and no default model exists; pick one in the model menu once |
-| "Truncated at the token cap" | Raise `maxOutputTokens` or shorten the draft |
+| `优化期间草稿已改动，结果未采用` | You edited the composer during the call; the result is never written over newer input — polish again |
+| `无法确定使用哪个模型：请先在会话里选择模型` | The session never selected a model and no default model exists; pick one in the model menu once |
+| `优化结果在 token 上限处被截断…` | Raise `maxOutputTokens` or shorten the draft |
 | Plugin fails to load at startup | The boot output carries the original stack; typical causes are a missing `lib/` build or a composition without `llm` / `settings` |
 | No `prompt-polish` section in Settings | The profile lacks `dsh-settings-file` (shipped by `dsh-base`), or the plugin layer never entered `dsh.profile.bundles` |
 | Button visible but the call fails with a provider error | The tooltip carries the provider's own message; the usual causes are credentials and quota in the harness credential store |
