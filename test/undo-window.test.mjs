@@ -53,21 +53,25 @@ const fakeSlots = {
 }
 let registered
 
-/** 模拟宿主设置：undoWindowMs 可变，subscribe 用于触发重渲染。 */
+/**
+ * 模拟 dsh 0.1.7 的客户端设置域 `configForms`：`get(entryId)` 给出该插件条目的
+ * 表单快照；`undoWindowMs` 可变，`subscribe` 用于通知设置变更。
+ */
 let undoWindowMs = 1234
-const settingsListeners = new Set()
-const settingsScope = {
-  bind: () => ({
-    getSnapshot: () => ({ value: { undoWindowMs } }),
+const formListeners = new Set()
+const configForms = {
+  get: (entryId) => ({
+    getSnapshot: () => ({ value: entryId === 'prompt-polish' ? { undoWindowMs } : undefined }),
     subscribe: (listener) => {
-      settingsListeners.add(listener)
-      return () => settingsListeners.delete(listener)
+      formListeners.add(listener)
+      return () => formListeners.delete(listener)
     },
   }),
 }
 
-const services = { slots: fakeSlots, settingsScope }
+const services = { slots: fakeSlots, configForms }
 const fakeCtx = {
+  ...services,
   inject(deps, callback) {
     const scope = {}
     for (const name of deps) if (name in services) scope[name] = services[name]
@@ -148,7 +152,7 @@ if (writes[0] !== '优化后的提示词正文') { console.error('FAIL: 结果�
 
 // 3) 把设置里的窗口改成 5 毫秒并广播 —— 撤回态应在 5ms 后自行过期
 undoWindowMs = 5
-for (const listener of settingsListeners) listener()
+for (const listener of formListeners) listener()
 await act(async () => {
   render()
   await advance(30)
@@ -159,7 +163,7 @@ if (titleOf() !== '优化提示词') { console.error('FAIL: 撤回态应按设�
 // 4) 再跑一次，并在过期前点击撤回箭头 → 应还原"这次优化前的草稿"
 writes.length = 0
 undoWindowMs = 60000
-for (const listener of settingsListeners) listener()
+for (const listener of formListeners) listener()
 const beforeSecondRun = inputState.draft
 act(() => { button().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
 await act(async () => { await advance(0) })

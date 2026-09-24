@@ -63,14 +63,21 @@ const services = {
       },
     }),
   },
-  settingsScope: {
-    bind: () => ({
-      getSnapshot: () => ({ value: { undoWindowMs: 60000 } }),
+  // dsh 0.1.7 的客户端设置镜像：每个插件条目一份表单快照（entryId === 命名空间）。
+  configForms: {
+    get: (entryId) => ({
+      getSnapshot: () => ({ value: entryId === 'prompt-polish' ? { undoWindowMs: 90000 } : undefined }),
       subscribe: () => () => {},
     }),
   },
 }
+/*
+ * 客户端 cordis 上下文：真实外壳里，模块 `inject` 里声明的服务既能在
+ * `ctx.inject(deps, cb)` 的 scope 上读到，也能直接作为 ctx 的属性读到
+ * （客户端插件用 `ctx.configForms.get(...)` 这种直读写法）。这里两种都提供。
+ */
 const fakeCtx = {
+  ...services,
   inject(deps, callback) {
     const scope = {}
     for (const d of deps) scope[d] = services[d]
@@ -82,6 +89,12 @@ mod.apply(fakeCtx)
 
 // --- 5) 逐个渲染每个注册：归属机制应保证"只有一个插槽输出按钮" ---
 if (registrations.length === 0) { console.log('FAIL: 没有任何插槽注册成功'); process.exit(1) }
+// 模块必须在 inject 里声明 dsh 0.1.7 的设置镜像服务（旧 settingsScope 已被删除）。
+if (!Array.isArray(mod.inject) || !mod.inject.includes('configForms')) {
+  console.log('FAIL: 客户端 inject 未声明 configForms，实际 =', JSON.stringify(mod.inject))
+  process.exit(1)
+}
+console.log('[3b] inject 已声明 configForms（0.1.7 设置镜像服务）')
 console.log('[4b] 注册数:', registrations.length)
 const renderOne = (entry) => {
   const injectFace = typeof entry.options.inject === 'function' ? entry.options.inject('session-1') : {}
@@ -108,3 +121,23 @@ for (const entry of registrations) {
 }
 console.log(rendered === 1 ? '[9] PASS：恰好一个插槽渲染出按钮' : '[9] FAIL：渲染按钮的插槽数 = ' + rendered)
 console.log('    ', sample.slice(0, 200))
+
+// --- 6) 设置镜像：撤回窗口必须取自 configForms（而不是已被删除的 settingsScope） ---
+const diagnostics = globalThis.__dshPromptPolish
+if (diagnostics?.settingsMirror !== 'bound') {
+  console.log('FAIL: 设置镜像未绑定 configForms，diagnostics =', JSON.stringify(diagnostics))
+  process.exit(1)
+}
+// 撤回窗口必须真的读到了设置里的值（mock 返回 90000），而不是兜底的 60000。
+if (diagnostics.undoWindowMs !== 90000) {
+  console.log('FAIL: 撤回窗口未取到设置值，diagnostics =', JSON.stringify(diagnostics))
+  process.exit(1)
+}
+if (code.includes('settingsScope')) {
+  console.log('FAIL: 产物里仍引用已被删除的 settingsScope 服务')
+  process.exit(1)
+}
+console.log('[10] PASS：撤回窗口镜像绑定 configForms 且读到 undoWindowMs =', diagnostics.undoWindowMs)
+
+if (rendered !== 1) process.exit(1)
+

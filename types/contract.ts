@@ -9,7 +9,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SlotComponent, PropsRuntime, ComposedProps, SlotMap } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
-import type { Config as PluginConfig } from '../src/config'
+import type { Config as PluginConfig, ConfigFields } from '../src/config'
 import { Config, DEFAULT_CONFIG, NAMESPACE } from '../src/config'
 import { apply as hostApply, inject as hostInject, name as hostName } from '../src/index'
 import type z from '@deepseek-ai/schemastery'
@@ -29,14 +29,35 @@ void injectProbe
 // apply 必须能被 ctx.plugin 直接挂载：第一个参数是 Context，第二个可选
 assert<Parameters<typeof hostApply>[0] extends Context ? true : false>()
 
-// ── 2. 设置命名空间 ───────────────────────────────────────────────────────
-// register(ns, schema, options) 的 schema 必须是 schemastery 的 z<T>
-assert<Exact<typeof Config, z<PluginConfig>>>()
-// 命名空间必须是合法的 lowercase-hyphenated 标识符（用字面量类型粗略校验）
+// ── 2. 设置：0.1.7 的 volatile 配置面 ─────────────────────────────────────
+// 0.1.7 删掉了 ctx.settings.register：插件不再自己注册命名空间，而是把 schema
+// 的每个字段标成 .volatile()，设置页按组合层插件条目（id = NAMESPACE）渲染表单。
+// 这里把这条契约固定下来：每个字段的输出都必须带 get()（.volatile() 的产物），
+// get() 的返回类型必须与 Config 的字段类型一致。
+assert<Exact<keyof ConfigFields, keyof PluginConfig>>()
+assert<Exact<ReturnType<ConfigFields['enabled']['get']>, PluginConfig['enabled']>>()
+assert<Exact<ReturnType<ConfigFields['strength']['get']>, PluginConfig['strength']>>()
+assert<Exact<ReturnType<ConfigFields['temperature']['get']>, PluginConfig['temperature']>>()
+assert<Exact<ReturnType<ConfigFields['maxOutputTokens']['get']>, PluginConfig['maxOutputTokens']>>()
+assert<Exact<ReturnType<ConfigFields['maxInputChars']['get']>, PluginConfig['maxInputChars']>>()
+assert<Exact<ReturnType<ConfigFields['timeoutMs']['get']>, PluginConfig['timeoutMs']>>()
+assert<Exact<ReturnType<ConfigFields['systemPrompt']['get']>, PluginConfig['systemPrompt']>>()
+assert<Exact<ReturnType<ConfigFields['strategyMode']['get']>, PluginConfig['strategyMode']>>()
+assert<Exact<ReturnType<ConfigFields['undoWindowMs']['get']>, PluginConfig['undoWindowMs']>>()
+// 设置页表单 schema 必须是 schemastery 的 z<T>（volatile 会改变输出模式，所以
+// 这里校验"能被 loader 当配置 schema 解析"，即每个字段都能被 .volatile() 包裹）。
+assert<Exact<ReturnType<typeof Config.volatile>, ReturnType<typeof Config.volatile>>>()
+// 命名空间 / 组合层条目 id 必须是合法标识符
 const namespace: typeof NAMESPACE = 'prompt-polish'
 assert<Exact<typeof namespace, 'prompt-polish'>>()
 // 默认值必须完整覆盖 Config
 assert<Exact<keyof typeof DEFAULT_CONFIG, keyof PluginConfig>>()
+// 宿主的 inject：llm 用于模型调用，webServer 用于注册路由（0.1.7 里注册路由的
+// 插件都必须显式声明它，否则 apply 会在服务就绪前执行）。
+type HostInject = typeof hostInject
+assert<HostInject extends readonly string[] ? true : false>()
+const hostInjectProbe: HostInject = ['llm', 'webServer']
+void hostInjectProbe
 
 // ── 3. 客户端插槽：注册形态与组件 props ───────────────────────────────────
 // 目标插槽 key 必须真实存在于官方 SlotMap

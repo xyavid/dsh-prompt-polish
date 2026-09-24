@@ -22,8 +22,13 @@ import { ensureStyles } from './styles'
 import { OPTIMIZE_ENDPOINT, type OptimizeError, type OptimizeResponse } from '../protocol'
 import { normalizeEnhanceText } from '../prompts'
 
-/** 注入的服务：slots 必需；modelDirectories 可选（拿不到就让宿主兜底路由）。 */
-export const inject = ['slots']
+/**
+ * 注入的服务：slots 与 configForms 都是当前 dsh Web 外壳提供的必需服务
+ * （`configForms` 由 @deepseek-ai/dsh-client-ui-settings 提供，是设置文档
+ * 在浏览器里的镜像：`get(entryId)` 给出该插件条目的表单快照）。
+ * modelDirectories 是可选的，拿不到就让宿主兜底路由。
+ */
+export const inject = ['slots', 'configForms']
 
 /** 浏览器半所需的输入状态面（来自 slot 标准 props）。 */
 interface InputStateLike {
@@ -72,6 +77,10 @@ interface Diagnostics {
   slotsShape?: string
   /** 通过 ctx.get() 成功拿到的可选服务名。 */
   optionalVia?: string
+  /** 设置镜像（撤回窗口）的绑定结果：'bound' | 'missing' | 'failed'。 */
+  settingsMirror?: 'bound' | 'missing' | 'failed'
+  /** 从设置里读到的撤回窗口毫秒数（未读到则不写入）。 */
+  undoWindowMs?: number
   hookChanges: number
   errors: string[]
 }
@@ -108,17 +117,18 @@ declare const __DSH_PP_REPO_URL__: string
 const REPO_URL = typeof __DSH_PP_REPO_URL__ === 'string' ? __DSH_PP_REPO_URL__ : ''
 
 /**
- * 撤回窗口：优先用宿主设置里的 `undoWindowMs`（`settingsScope` 镜像），
+ * 撤回窗口：优先用宿主设置里的 `undoWindowMs`（`ctx.configForms` 的镜像），
  * 读不到时退回 60 秒。
  *
- * 不依赖"自定义 inject face 的 hooks"：那是 schema 中唯一的字段来源，
- * 但部分外壳不渲染这类注入面，会让 `undoWindowMs` 永远拿不到值。
- * 因此这里在客户端半的 `ctx` 上读一次设置，并用全局存储 + 无参订阅把值
- * 接进组件（订阅只用于让 React 重新渲染，不关心载荷）。
+ * dsh 0.1.7 起，客户端不再有 `settingsScope`：每个插件条目的表单由
+ * `dsh-client-ui-settings` 提供的 `configForms` 服务给出——
+ * `get(entryId)` 的 `getSnapshot().value` 就是宿主解析后的配置值。
+ * 这里在客户端半的 `ctx` 上读一次设置，并用全局存储 + 无参订阅把值接进组件
+ * （订阅只用于让 React 重新渲染，不关心载荷）。
  */
 const UNDO_KEY = Symbol.for('dsh-prompt-polish.undo-window')
 const UNDO_FALLBACK_MS = 60000
-/** 设置命名空间名（与 cordis.patch.yml / config.ts 保持一致）。 */
+/** 设置条目 id（与 cordis.patch.yml / config.ts 的 NAMESPACE 保持一致）。 */
 const SETTINGS_NAMESPACE = 'prompt-polish'
 /** 监听器集合：仅用于触发重渲染。 */
 const undoListeners = new Set<() => void>()
@@ -169,6 +179,8 @@ function publishUndoWindow(ms: number | undefined): void {
 function adoptUndoWindow(raw: unknown): boolean {
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return false
   publishUndoWindow(raw)
+  // 记进诊断：真机排查"撤回窗口没生效"时能一眼看到读到的是什么值。
+  diagnostics.undoWindowMs = raw
   return true
 }
 
@@ -218,8 +230,8 @@ function PolishButton(props: Props): ReactNode {
   const draft = useInput((state) => state.draft)
   const phase = useInput((state) => state.phase)
   const occurrences = useInput((state) => state.occurrences.length)
-  // 撤回窗口来自宿主设置（settingsScope 镜像）；读不到时用兜底值。
-  const undoWindowMs = useSyncExternalStore(subscribeUndoWindow, undoWindowValue, undoWindowValue) ?? UNDO_FALLBACK_MS
+  // 撤回窗口来自宿主设置（configForms 镜像）；读不到时用兜底值。
+  const undoWindowMsRef = useSyncExternalStore(subscribeUndoWindow, undoWindowValue, undoWindowValue) ?? UNDO_FALLBACK_MS
   diagnostics.hookChanges += 1
   if (diagnostics.stage !== 'rendering') report('rendering')
   const [busy, setBusy] = useState(false)
@@ -307,10 +319,10 @@ function PolishButton(props: Props): ReactNode {
   // 撤回入口按设置里的窗口自动过期（0 = 一直保留到手动撤回）。
   useEffect(() => {
     if (undo === undefined) return
-    if (undoWindowMs === undefined || undoWindowMs <= 0) return
-    const timer = setTimeout(() => setUndo(undefined), undoWindowMs)
+    if (undoWindowMsRef === undefined || undoWindowMsRef <= 0) return
+    const timer = setTimeout(() => setUndo(undefined), undoWindowMsRef)
     return () => clearTimeout(timer)
-  }, [undo, undoWindowMs])
+  }, [undo, undoWindowMsRef])
 
   const canUndo = undo !== undefined
   const empty = normalizeEnhanceText(draft) === ''
@@ -385,10 +397,26 @@ function RevertIcon(): ReactNode {
 const NO_SELECTION = (): (() => void) => () => {}
 
 /**
+ * 浏览器端 Cordis 上下文（只声明本插件用到的部分）。
+ * `configForms` 是 dsh 0.1.7 的设置镜像服务，已在模块的 `inject` 中声明；
+ * 这里保留可选形态，让"设置域缺失"时能安全降级而不是抛错。
+ */
+interface ClientContext {
+  inject(deps: string[], callback: (scope: never) => unknown): void
+  effect(callback: () => unknown, label?: string): void
+  configForms?: {
+    get(entryId: string): {
+      getSnapshot(): { value?: { undoWindowMs?: unknown } }
+      subscribe(listener: () => void): () => void
+    }
+  }
+}
+
+/**
  * 挂载浏览器半。
  * @param ctx - 浏览器端 Cordis 上下文。
  */
-export function apply(ctx: { inject(deps: string[], callback: (scope: never) => unknown): void; effect(callback: () => unknown, label?: string): void }): void {
+export function apply(ctx: ClientContext): void {
   try {
     applyInner(ctx)
   } catch (error) {
@@ -401,7 +429,7 @@ export function apply(ctx: { inject(deps: string[], callback: (scope: never) => 
  * 真正的挂载逻辑（由 apply 包裹，保证异常可观测）。
  * @param ctx - 浏览器端 Cordis 上下文。
  */
-function applyInner(ctx: { inject(deps: string[], callback: (scope: never) => unknown): void; effect(callback: () => unknown, label?: string): void }): void {
+function applyInner(ctx: ClientContext): void {
   try {
     ensureStyles()
     report('styles-ready')
@@ -409,33 +437,33 @@ function applyInner(ctx: { inject(deps: string[], callback: (scope: never) => un
     report('styles-failed', error)
   }
   /*
-   * 设置镜像（只取"撤回窗口"一个字段）：在客户端半的 ctx 上绑定命名空间，
-   * 而不是通过"自定义 inject face 的 hooks"——后者在外壳下可能整段不渲染。
-   * 每次 apply 都用新对象 bind：官方文档明确要求按调用方生命周期绑定，
-   * 复用旧 scope 会在热重载后读到失效的镜像。
+   * 设置镜像（只取"撤回窗口"一个字段）：走 dsh 0.1.7 的 `configForms` 服务
+   * （由 @deepseek-ai/dsh-client-ui-settings 提供，条目 id 就是命名空间）。
+   * 拿不到镜像（老外壳 / 设置域缺失）时退回 60 秒兜底值，绝不阻断按钮注册。
    */
-  ctx.inject(['settingsScope'], (scopeCtx: never) => {
-    try {
-      const settings = (scopeCtx as {
-        settingsScope: {
-          bind(spec: { namespace: string }): {
-            getSnapshot(): { value?: { undoWindowMs?: number } }
-            subscribe(listener: () => void): () => void
-          }
-        }
-      }).settingsScope.bind({ namespace: SETTINGS_NAMESPACE })
-      if (!adoptUndoWindow(settings.getSnapshot().value?.undoWindowMs)) publishUndoWindow(UNDO_FALLBACK_MS)
-      const stop = settings.subscribe(() => {
-        adoptUndoWindow(settings.getSnapshot().value?.undoWindowMs)
+  try {
+    const forms = ctx.configForms
+    if (forms === undefined) {
+      diagnostics.settingsMirror = 'missing'
+      report('settings-mirror-missing')
+      publishUndoWindow(UNDO_FALLBACK_MS)
+    } else {
+      const form = forms.get(SETTINGS_NAMESPACE)
+      if (!adoptUndoWindow(form.getSnapshot().value?.undoWindowMs)) publishUndoWindow(UNDO_FALLBACK_MS)
+      const stop = form.subscribe(() => {
+        if (!adoptUndoWindow(form.getSnapshot().value?.undoWindowMs)) publishUndoWindow(UNDO_FALLBACK_MS)
       })
       ctx.effect(() => stop, 'dsh-prompt-polish: undo-window mirror')
-    } catch (error) {
-      report('settings-mirror-failed', error)
-      publishUndoWindow(UNDO_FALLBACK_MS)
+      diagnostics.settingsMirror = 'bound'
+      report('settings-mirror-bound')
     }
-  })
+  } catch (error) {
+    diagnostics.settingsMirror = 'failed'
+    report('settings-mirror-failed', error)
+    publishUndoWindow(UNDO_FALLBACK_MS)
+  }
 
-  ctx.inject(['slots'], (slotsCtx: never) => {
+  ctx.inject(['slots', 'configForms'], (slotsCtx: never) => {
     // 整个回调体包在 try/catch 里：外壳会吞掉这里的异常，必须自己留痕。
     try {
       diagnostics.slotsInjected = true

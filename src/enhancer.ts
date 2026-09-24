@@ -91,10 +91,12 @@ export async function optimizeText(llm: LlmFace, call: OptimizeCall): Promise<Op
     }
     // 用户消息 = 强化用 USER 模板 + 草稿（{input} 注入），
     // 模板里的语言一致性与输出格式约束随消息一起进模型。
+    // 来源标注用 0.1.7 的 `MessageSourceMap`：可用的 kind 是
+    // user / model / tool / system-prompt，本调用是插件代表用户发起的一次补全。
     const messages = [
       createUserMessage({
         content: [{ type: 'text', text: renderUserPrompt(call.text) }],
-        source: { kind: 'plugin', plugin: 'dsh-prompt-polish' },
+        source: { kind: 'user' },
       }),
     ]
     const options: GenerateOptions = {

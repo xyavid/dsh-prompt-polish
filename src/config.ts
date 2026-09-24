@@ -1,11 +1,20 @@
 /**
  * 插件配置：一份 schemastery schema，Web 设置页会自动渲染成表单；
  * 同一份默认值也被浏览器半镜像使用（设置里改了立即生效）。
+ *
+ * dsh 0.1.7 起设置不再由插件自己 `ctx.settings.register(...)` 占用命名空间：
+ * 组合层（cordis.patch.yml / profile 的 patch）里的插件行本身就是那条配置，
+ * 配置项能不能在设置页里改，取决于 schema 字段有没有 `.volatile()`。
+ * 带 `.volatile()` 的字段解析出来是"引用"（`.get()` 读当前值），用户在设置页
+ * 保存时 loader 只把新值 .set 进这些引用，插件不用重挂载就能读到新值。
+ *
+ * 条目 id 就是命名空间：profile 里那条插件行叫 `prompt-polish`
+ * （见 cordis.patch.yml），设置写回也按这个 id 落到 profile patch。
  * @module dsh-prompt-polish/config
  */
 import z from '@deepseek-ai/schemastery'
 
-/** 设置命名空间（settings.yaml 里的段落名）。 */
+/** 设置命名空间 / 组合层插件条目 id。 */
 export const NAMESPACE = 'prompt-polish'
 
 /** 优化力度：控制模型改写的自由度。 */
@@ -47,10 +56,11 @@ export const DEFAULT_CONFIG: Config = {
   undoWindowMs: 60000,
 }
 
-/** 设置页表单 schema。 */
-export const Config: z<Config> = z.object({
+/** 设置页表单 schema。每个字段都带 `.volatile()`，才能在设置页里改并即时生效。 */
+export const Config = z.object({
   enabled: z.boolean().default(DEFAULT_CONFIG.enabled)
-    .description('总开关：关闭后隐藏输入框旁的小星星按钮。'),
+    .description('总开关：关闭后隐藏输入框旁的小星星按钮。')
+    .volatile(),
   // 注意：z.union(STRENGTHS) 会把类型退化成 string，导致 schema 与 Config 不匹配，
   // 所以逐项用 z.const 组成联合，保持字面量类型。
   strength: z.union([
@@ -58,22 +68,55 @@ export const Config: z<Config> = z.object({
     z.const('balanced'),
     z.const('aggressive'),
   ]).default(DEFAULT_CONFIG.strength)
-    .description('优化力度：保守=只纠错与结构化；均衡=补全隐含条件；激进=重写成完整任务描述（长度上限放宽到约 1500 字符）。'),
+    .description('优化力度：保守=只纠错与结构化；均衡=补全隐含条件；激进=重写成完整任务描述（长度上限放宽到约 1500 字符）。')
+    .volatile(),
   temperature: z.number().min(0).max(1).step(0.05).default(DEFAULT_CONFIG.temperature)
-    .description('采样温度：越低越忠实原文。'),
+    .description('采样温度：越低越忠实原文。')
+    .volatile(),
   maxOutputTokens: z.number().step(1).min(128).max(16384).default(DEFAULT_CONFIG.maxOutputTokens)
-    .description('单次优化的输出 token 上限。激进档 + 会话开启推理时需要更大额度；被截断时插件拒绝写回并报错。'),
+    .description('单次优化的输出 token 上限。激进档 + 会话开启推理时需要更大额度；被截断时插件拒绝写回并报错。')
+    .volatile(),
   maxInputChars: z.number().step(1).min(100).max(200000).default(DEFAULT_CONFIG.maxInputChars)
-    .description('输入字数上限：超限拒绝而不是截断（截断会改变原意）。'),
+    .description('输入字数上限：超限拒绝而不是截断（截断会改变原意）。')
+    .volatile(),
   timeoutMs: z.number().step(1).min(5000).max(600000).default(DEFAULT_CONFIG.timeoutMs)
-    .description('单次优化的超时时间（毫秒）。'),
+    .description('单次优化的超时时间（毫秒）。')
+    .volatile(),
   systemPrompt: z.string().role('textarea').default(DEFAULT_CONFIG.systemPrompt)
-    .description('自定义系统提示词：留空使用内置优化策略。'),
+    .description('自定义系统提示词：留空使用内置优化策略。')
+    .volatile(),
   strategyMode: z.union(['replace-default', 'extend-default']).default(DEFAULT_CONFIG.strategyMode)
-    .description('自定义提示词的组合方式：整体替换内置策略，或追加在内置策略之后（内置的硬性约束继续生效）。'),
+    .description('自定义提示词的组合方式：整体替换内置策略，或追加在内置策略之后（内置的硬性约束继续生效）。')
+    .volatile(),
   undoWindowMs: z.number().step(1).min(0).max(600000).default(DEFAULT_CONFIG.undoWindowMs)
-    .description('“撤回优化”入口的保留时长（毫秒）。'),
+    .description('“撤回优化”入口的保留时长（毫秒）。')
+    .volatile(),
 })
+
+/**
+ * 插件行里解析出来的配置：`.volatile()` 字段解析成稳定引用，`.get()` 读当前值。
+ *
+ * 不直接对 schema 取类型：schemastery 的 `volatile()` 会改变 schema 的输出模式
+ * （`Mode = 'volatile'`），宿主 loader 的配置解析对插件是不透明的，所以这里用
+ * 最小结构面描述"我读到的配置长什么样"，由 `readConfig()` 在运行时收窄。
+ */
+export interface VolatileField<T> {
+  /** 读当前值；用户在设置页保存后同一引用里就是新值。 */
+  get(): T
+}
+
+/** `.volatile()` 之后的配置形状。 */
+export interface ConfigFields {
+  enabled: VolatileField<boolean>
+  strength: VolatileField<'conservative' | 'balanced' | 'aggressive'>
+  temperature: VolatileField<number>
+  maxOutputTokens: VolatileField<number>
+  maxInputChars: VolatileField<number>
+  timeoutMs: VolatileField<number>
+  systemPrompt: VolatileField<string>
+  strategyMode: VolatileField<'replace-default' | 'extend-default'>
+  undoWindowMs: VolatileField<number>
+}
 
 /**
  * 校验一份解析后的配置：schema 之外的不变量在这里 fail-loud。
