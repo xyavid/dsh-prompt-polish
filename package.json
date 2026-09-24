@@ -1,6 +1,6 @@
 {
   "name": "@xyavid/dsh-prompt-polish",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "dsh Web 插件：在输入框模型名左侧加一个小星星按钮，一键把当前草稿交给模型改写成结构化提示词，可一键撤回。",
   "type": "module",
   "main": "lib/index.js",
@@ -12,7 +12,7 @@
   },
   "dsh": {
     "engines": {
-      "dsh": ">=0.1.5-rc.1"
+      "dsh": ">=0.1.7-rc.1"
     },
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -36,7 +36,7 @@
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node test/harness.mjs && node test/undo-window.test.mjs",
+    "test": "node test/harness.mjs && node test/host-config.test.mjs && node test/loader-config.test.mjs && node test/undo-window.test.mjs",
     "verify:lib": "node scripts/verify-lib.mjs",
     "check": "pnpm run build && pnpm run typecheck && pnpm run test && pnpm run verify:lib",
     "prepare": "node scripts/build.mjs",
@@ -59,22 +59,21 @@
   "packageManager": "pnpm@10.29.3",
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-host-webserver": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-llm": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-session": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-settings": "^0.1.5-rc.1",
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@deepseek-ai/dsh-host-webserver": "^0.1.7-rc.1",
+    "@deepseek-ai/dsh-llm": "^0.1.7-rc.1",
+    "@deepseek-ai/dsh-session": "^0.1.7-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.4"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-client-store": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-conversation": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-host-webserver": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-llm": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-session": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-settings": "0.1.5-rc.1",
-    "@deepseek-ai/schemastery": "^3.18.1",
+    "@deepseek-ai/dsh-client-store": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-host-webserver": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-llm": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-session": "0.1.7-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.4",
     "@types/node": "^22.20.0",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.1",

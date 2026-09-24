@@ -8,16 +8,34 @@
 
 - 接入 harness locale 命名空间，让按钮与错误文案支持中英双语。
 
-### 文档
+## [0.3.0] — 2026-09-24
 
-- README（中/英）新增「功能展示」章节，嵌入工具行按钮与「优化前 / 优化后」三张截图（`image/`）。
-- 校订 README（中/英）中与实现不符或已过时的描述：构建戳记是源码内容哈希而非时间戳、撤回窗口经设置镜像读取 `undoWindowMs` 并在读不到时以 60 秒兜底、`pnpm run check` 包含 `verify:lib`、目录树补上 `scripts/verify-lib.mjs` 与 `test/undo-window.test.mjs`、排错表改引真实的中文提示文案。
-- 修正安装章节：优先推荐从 npm 安装，替换仓库占位符为真实地址，并说明 GitHub 直装需先放行 `prepare`（pnpm ≥ 10 会拦截，见下）。
+适配 dsh `0.1.7-rc.1`：官方删除了插件自注册设置命名空间的接口，本版把插件搬到新的设置面上，并修掉一个"插件加载成功但接口静默 404"的时序问题。
 
 ### 变更
 
+- **适配 dsh `0.1.7-rc.1` 的设置接口（破坏性）**：`ctx.settings.register` 与客户端 `settingsScope` 已被官方删除，插件不再自行注册设置命名空间——
+  - 配置 schema（`src/config.ts`）每个字段改标 `.volatile()`，设置页按组合层插件条目 `prompt-polish` 渲染；用户保存时 loader 直接把新值写进运行中的引用，下一次调用即生效，无需重启或重挂载（`src/index.ts` 的 `readConfig()` 每次请求现取）。
+  - 跨命名空间读取默认模型改用设置域的 `ctx.settings.describe()`，按条目 id `agent-default-model` 查。
+  - 客户端撤回窗口镜像从 `settingsScope.bind({ namespace })` 换成 `configForms.get('prompt-polish')`（`inject` 声明 `configForms`），服务缺失时仍退回 60 秒。
+  - 宿主 `inject` 从 `['llm', 'settings']` 改为 `['llm', 'webServer']`：设置不再是插件注册的命名空间，但注册路由必须显式声明 `webServer`——本插件的条目在组合树里排在 webServer 插件之前，只声明 `llm` 会让 `apply` 在服务就绪前执行、`/api/prompt-polish/optimize` 静默不注册（实测修复前该路径返回 404，修复后返回 405 / 422 / 200）。
+  - 模型消息来源标注从自造的 `{ kind: 'plugin' }` 改为 0.1.7 `MessageSourceMap` 认可的 `{ kind: 'user' }`。
+- 依赖与门槛：`@deepseek-ai/schemastery` 最低版本提到 `3.18.4`（`.volatile()` 从这一版才有），`dsh` 引擎要求提到 `>= 0.1.7-rc.1`；`@deepseek-ai/dsh-*` 开发依赖同步到 `0.1.7-rc.1`（新增 `dsh-client-ui-settings` 用于核对 `configForms` 契约）。
 - GitHub 直装的真实行为：pnpm ≥ 10 默认拦截依赖构建脚本，未在 profile 的 `pnpm-workspace.yaml` 中通过 `onlyBuiltDependencies` 放行时会以 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` 失败。
-- `package.json` 的 `files` 白名单加入 `image/`，使 README 截图在 npm 页面同样可显示（随下次发版生效）。
+- `package.json` 的 `files` 白名单加入 `image/`，使 README 截图在 npm 页面同样可显示。
+
+### 文档
+
+- README（中/英）新增「功能展示」章节，嵌入工具行按钮与「优化前 / 优化后」三张截图（`image/`）。
+- 校订 README（中/英）中与实现不符或已过时的描述：构建戳记是源码内容哈希而非时间戳、`pnpm run check` 包含 `verify:lib`、目录树补上 `scripts/verify-lib.mjs` 与 `test/undo-window.test.mjs`、排错表改引真实的中文提示文案。
+- 修正安装章节：优先推荐从 npm 安装，替换仓库占位符为真实地址，并说明 GitHub 直装需先放行 `prepare`（pnpm ≥ 10 会拦截，见下）。
+- README（中/英）与 `docs/compatibility.md` 全面改写为 `0.1.7` 的设置面（volatile 字段、`configForms`、`describe()`），排错表补上"插件自己的 `node_modules` 里 schemastery 过旧会报 `.volatile is not a function`"这一条。
+
+### 测试
+
+- 新增 `test/host-config.test.mjs`：宿主半设置接口回归——挂载时不得触碰 `ctx.settings.register`（把它设成会抛错的陷阱 getter）、volatile 引用改动后立即生效、无 `webServer` / 非法配置时降级。
+- 新增 `test/loader-config.test.mjs`：用真实 `resolveConfig(runtime, rawConfig)` 走 loader 的配置解析路径，断言 9 个字段都解析成 `.get()` 引用，并用解析结果挂载插件。
+- `test/harness.mjs` / `test/undo-window.test.mjs` 改为模拟 `configForms`，并断言撤回窗口确实取到设置值（90000 而非兜底 60000）。
 
 ## [0.2.0] — 2026-09-11
 
