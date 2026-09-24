@@ -3,7 +3,7 @@
 [![CI](https://github.com/xyavid/dsh-prompt-polish/actions/workflows/ci.yml/badge.svg)](https://github.com/xyavid/dsh-prompt-polish/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@xyavid/dsh-prompt-polish)](https://www.npmjs.com/package/@xyavid/dsh-prompt-polish)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-%3E%3D0.1.5--rc.1-4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-%3E%3D0.1.7--rc.1-4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
 
 **Prompt polishing for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) web GUI** — one click turns a rough composer draft into a clearer, more actionable prompt: explicit goal, concrete requirements, constraints, and acceptance criteria. The button sits right next to the model name, calls the model your session already uses, writes the result straight back into the composer, and then turns into an undo arrow.
 
@@ -70,8 +70,8 @@ flowchart LR
 
 The plugin is **one npm package with two halves**, following the dsh plugin conventions:
 
-- **Host half** (`exports "."`, Node): registers the `prompt-polish` settings namespace (schemastery — rendered automatically by the built-in plugin config page) and the `POST /api/prompt-polish/optimize` route on the shared webserver. The model call uses `ctx.llm.stream` with the auxiliary-call discipline the harness applies to session titles: composed deadline plus caller cancellation rechecked during and after the stream, terminal-finish validation, and refusal of truncated output.
-- **Browser half** (`exports "./client"`, loaded through `dsh.client`): registers the button into the `conversation.input.right` slot, reads the draft with `useInput`, writes it with `inputActions.setDraft`, renders the three button states, and mirrors `undoWindowMs` through `ctx.settingsScope`. It consumes exactly two services — `slots` and (optionally) `settingsScope` — and never renders custom inject-face hooks; see [docs/compatibility.md](./docs/compatibility.md) for why that distinction matters. `dsh.client.inject` is intentionally empty: it lists *client-package* dependencies for graph ordering, and this bundle has none.
+- **Host half** (`exports "."`, Node): exports the `Config` schema (every field marked `.volatile()`, so dsh renders the settings form for the composition entry `prompt-polish`) and registers the `POST /api/prompt-polish/optimize` route on the shared webserver. The model call uses `ctx.llm.stream` with the auxiliary-call discipline the harness applies to session titles: composed deadline plus caller cancellation rechecked during and after the stream, terminal-finish validation, and refusal of truncated output.
+- **Browser half** (`exports "./client"`, loaded through `dsh.client`): registers the button into the `conversation.input.right` slot, reads the draft with `useInput`, writes it with `inputActions.setDraft`, renders the three button states, and mirrors `undoWindowMs` through `ctx.configForms`. It consumes exactly two services — `slots` and `configForms` — and never renders custom inject-face hooks; see [docs/compatibility.md](./docs/compatibility.md) for why that distinction matters. `dsh.client.inject` is intentionally empty: it lists *client-package* dependencies for graph ordering, and this bundle has none.
 
 The two halves never share code at runtime: the browser half receives only the wire types and the prompt normalization helper, and the host half does all credential-bearing work.
 
@@ -79,12 +79,12 @@ The two halves never share code at runtime: the browser half receives only the w
 
 | | |
 |---|---|
-| dsh | `>= 0.1.5-rc.1` (verified on `0.1.5-rc.1`) |
+| dsh | `>= 0.1.7-rc.1` (verified on `0.1.7-rc.1`) |
 | Profile | `web` — the desktop app and `dsh web` share this profile |
 | Node | `^22.19.0 \|\| >=24.0.0` (only for building from source) |
 | Plugin | `0.2.x` |
 
-The host half declares `inject: ['llm', 'settings']`; `webServer`, `sessions`, and the default-model namespace are probed optionally and degrade gracefully when absent.
+The host half declares `inject: ['llm']` (since `0.1.7` settings are no longer a namespace a plugin registers — the configuration is resolved from the composition entry); `webServer`, `sessions`, and the settings domain are probed optionally and degrade gracefully when absent.
 
 ## Install
 
@@ -171,7 +171,7 @@ Type a draft, then click the sparkle button left of the model name.
 
 ## Configuration
 
-Everything lives in the `prompt-polish` settings namespace, editable from **Settings → 插件配置** or directly in `~/.dsh/settings.yaml`. Changes are applied live (`applies: 'live'`).
+Everything lives on the `prompt-polish` composition entry, editable from **Settings → 插件配置** or directly in that entry's `config` block in the profile's `cordis.patch.yml`. Since `0.1.7` the settings domain writes edits back to the profile patch, and the plugin reads the `.volatile()` references declared in its schema, so a save takes effect on the next call **without a restart or a remount**.
 
 Defaults come from two places, in this order: the schema defaults below, overridden by the composition layer's `config` block in `cordis.patch.yml`, overridden by your settings section. Out of the box the composition layer pins `enabled`, `temperature`, `maxOutputTokens`, `timeoutMs`, and `maxInputChars`, so those five values are the effective defaults even if you never open the settings page.
 
@@ -185,7 +185,7 @@ Defaults come from two places, in this order: the schema defaults below, overrid
 | `timeoutMs` | `60000` | next call | End-to-end deadline of one call; timeout surfaces as a distinct message, not a generic failure |
 | `systemPrompt` | empty | next call | Your own strategy text; empty uses the built-in strategy |
 | `strategyMode` | `replace-default` | next call | `replace-default` swaps the built-in strategy out entirely (its hard rules — preserve intent, never fabricate, body-only output, mirror the input language — are **not** retained automatically); `extend-default` appends your text after the built-in strategy, keeping those rules in force |
-| `undoWindowMs` | `60000` | live | How long the undo affordance stays available (`0` = forever); the button reads it through the client settings mirror |
+| `undoWindowMs` | `60000` | live | How long the undo affordance stays available (`0` = forever); the button reads it through the client `configForms` mirror |
 
 "Applies" mirrors the namespace's `applies: 'live'` registration: every field is re-read on each request, and
 `enabled` / `undoWindowMs` additionally affect what the browser shows without a restart. Only changes to the
@@ -226,7 +226,7 @@ falling back to the harness default".
 | Model returns nothing usable | Normalized output empty → refused (`upstream`); retryable |
 | Upstream model failure | Mapped to `upstream` with the provider's own text as the tooltip detail |
 | Plugin disabled in settings | Button hidden; the route answers `403` |
-| Profile has no `webServer` | The host half registers only the settings namespace and logs one line — headless profiles do not fail |
+| Profile has no `webServer` | The host half logs one line and stops — headless profiles do not fail |
 
 Every failure path leaves the composer exactly as you typed it. Error messages surface on the button itself (red icon + hover text) — the plugin never opens a dialog or a toast.
 
@@ -256,7 +256,7 @@ dsh-prompt-polish/
 ├── package.json          dsh.bundle.patch (layer) + dsh.client (browser half) + scripts/exports
 ├── cordis.patch.yml      the composition layer: one insert row; its config is the settings base layer
 ├── src/
-│   ├── index.ts          host apply(): settings namespace + route + route resolution + error mapping
+│   ├── index.ts          host apply(): config refs (.volatile()) + route + route resolution + error mapping
 │   ├── enhancer.ts       ctx.llm.stream call: deadline racing, cancellation, finish validation, normalization
 │   ├── prompts.ts        built-in strategy (SYSTEM/USER templates) + strength hints + output cleanup
 │   ├── config.ts         schemastery schema, defaults, input checks
@@ -335,10 +335,10 @@ copy(JSON.stringify(globalThis.__dshPromptPolish))
 | `优化期间草稿已改动，结果未采用` | You edited the composer during the call; the result is never written over newer input — polish again |
 | `无法确定使用哪个模型：请先在会话里选择模型` | The session never selected a model and no default model exists; pick one in the model menu once |
 | `优化结果在 token 上限处被截断…` | Raise `maxOutputTokens` or shorten the draft |
-| Plugin fails to load at startup | The boot output carries the original stack; typical causes are a missing `lib/` build or a composition without `llm` / `settings` |
-| No `prompt-polish` section in Settings | The profile lacks `dsh-settings-file` (shipped by `dsh-base`), or the plugin layer never entered `dsh.profile.bundles` |
+| Plugin fails to load at startup | The boot output carries the original stack; typical causes are a missing `lib/` build, a composition without an `llm` service, or a stale schemastery in the plugin's own `node_modules` (0.1.7 needs 3.18.4+, otherwise `.volatile is not a function`) |
+| No `prompt-polish` section in Settings | The profile lacks the settings domain (`configForms`, shipped by `@deepseek-ai/dsh-client-ui-settings`), or the plugin layer never entered `dsh.profile.bundles` |
 | Button visible but the call fails with a provider error | The tooltip carries the provider's own message; the usual causes are credentials and quota in the harness credential store |
-| Settings edits seem to do nothing | The namespace is registered `applies: 'live'`, so a save re-resolves the value for the next call; only bundle-list changes need a restart. If a save is ignored entirely, check that the profile has a settings provider (`dsh-settings-file`, shipped by `dsh-base`) and that the `prompt-polish` section is valid YAML |
+| Settings edits seem to do nothing | On 0.1.7 a volatile field is written straight into the running reference, so a save applies on the next call with no restart. If nothing changes, check that the save actually landed in the profile patch (the `config` block of the `prompt-polish` entry) |
 | Need the host-side story | The host half logs one line per activation (`prompt-polish: 已挂载 /api/prompt-polish/optimize`). Desktop app: `%APPDATA%\DSH Desktop\logs\host\dsh-<date>.log`; `dsh web` on Windows/Linux/macOS: the terminal that launched it |
 
 ## Security model
@@ -355,11 +355,11 @@ copy(JSON.stringify(globalThis.__dshPromptPolish))
 | Item | Detail |
 |---|---|
 | Single button per session | The client admits one in-flight polish at a time; a cancelled call's late response is discarded by request id |
-| Undo window needs a settings service | The button reads `undoWindowMs` through the client-side `settingsScope` mirror; if a composition mounts no settings service the window silently falls back to 60 s |
+| Undo window needs the settings domain | The button reads `undoWindowMs` through the client-side `configForms` mirror; if a composition mounts no settings domain the window silently falls back to 60 s |
 | No context awareness | The session history is never read; the draft is polished on its own |
 | Chips are refused | `/command` and `@reference` drafts are rejected rather than rewritten, because filling text back would destroy the chips |
 | Route prefix is load-bearing | Keep the endpoint under `/api` unless you add your own trust check |
-| Older dsh versions | Only the `0.1.5-rc.1` line is verified; earlier lines may lack the `conversation.input.*` slots |
+| Older dsh versions | Built for the `0.1.7-rc.1` line: settings ride the schema's `.volatile()` fields plus the client `configForms` mirror. The 0.1.5 line's `ctx.settings.register` / `settingsScope` were removed upstream and are no longer supported |
 
 ## FAQ
 
@@ -376,7 +376,7 @@ The write-back path sets plain text through `inputActions.setDraft`, which would
 Truncation silently changes your meaning. The plugin refuses and shows the exact counts.
 
 **Does it work in a headless or SDK profile?**
-The host half activates and registers its settings namespace, logs one line about the missing `webServer`, and does nothing else — polishing is a browser feature.
+The host half activates (its configuration is resolved from the composition entry, so no settings domain is required), logs one line about the missing `webServer`, and does nothing else — polishing is a browser feature.
 
 **Does it work with the official DeepSeek route?**
 Yes. It rides `ctx.llm`, so any provider the harness serves (DeepSeek official, OpenAI-compatible gateways) works.
@@ -397,7 +397,7 @@ After installing and restarting `dsh web`:
 
 ## Acknowledgments
 
-The plugin follows the conventions of the dsh plugin family: one bundle patch layer, a host half that owns the route and the settings namespace, and a browser half that only touches session-scope standard props. The built-in strategy templates are kept verbatim because their language-consistency clauses and counter-examples are hard-won — change the style through `systemPrompt` rather than deleting them.
+The plugin follows the conventions of the dsh plugin family: one bundle patch layer, a host half that exports a volatile config schema and owns the route, and a browser half that only touches session-scope standard props. The built-in strategy templates are kept verbatim because their language-consistency clauses and counter-examples are hard-won — change the style through `systemPrompt` rather than deleting them.
 
 ## License
 

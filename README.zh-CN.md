@@ -3,7 +3,7 @@
 [![CI](https://github.com/xyavid/dsh-prompt-polish/actions/workflows/ci.yml/badge.svg)](https://github.com/xyavid/dsh-prompt-polish/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@xyavid/dsh-prompt-polish)](https://www.npmjs.com/package/@xyavid/dsh-prompt-polish)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-%3E%3D0.1.5--rc.1-4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-%3E%3D0.1.7--rc.1-4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）Web 界面加一个**提示词优化按钮**：点一下，把输入框里的草稿交给模型改写成更清晰、更可执行的提示词——目标明确、要求具体、约束清楚、验收可判。按钮就在模型名旁边，用的是你当前会话已经选好的模型，结果直接写回输入框，随后按钮自己变成撤回箭头。
 
@@ -68,7 +68,7 @@ flowchart LR
 
 插件是**一个 npm 包、两半结构**，遵循 dsh 插件约定：
 
-- **宿主半**（`exports "."`，Node）：注册 `prompt-polish` 设置命名空间（schemastery，内置插件配置页自动渲染）与共享 web 服务器上的 `POST /api/prompt-polish/optimize` 路由。模型调用走 `ctx.llm.stream`，并采用 harness 给会话标题用同一套辅助调用纪律：组合超时 + 调用方取消（流中与流后各校验一次）、终止原因校验、拒绝截断结果。
+- **宿主半**（`exports "."`，Node）：导出 `Config` schema（字段带 `.volatile()`，dsh 按组合层插件条目 `prompt-polish` 自动渲染设置表单），并注册共享 web 服务器上的 `POST /api/prompt-polish/optimize` 路由。模型调用走 `ctx.llm.stream`，并采用 harness 给会话标题用同一套辅助调用纪律：组合超时 + 调用方取消（流中与流后各校验一次）、终止原因校验、拒绝截断结果。
 - **浏览器半**（`exports "./client"`，由 `dsh.client` 加载）：把按钮注册进 `conversation.input.right` 插槽，用 `useInput` 读草稿、用 `inputActions.setDraft` 写回，并渲染按钮三态。它**只用 session 作用域的标准 props**——原因见 [docs/compatibility.md](./docs/compatibility.md)。
 
 两半在运行时不共享代码：浏览器半只拿到线协议类型和提示词清洗函数，所有涉及凭据的工作都在宿主半完成。
@@ -77,12 +77,12 @@ flowchart LR
 
 | | |
 |---|---|
-| dsh | `>= 0.1.5-rc.1`（已在 `0.1.5-rc.1` 验证） |
+| dsh | `>= 0.1.7-rc.1`（已在 `0.1.7-rc.1` 验证） |
 | Profile | `web` —— 桌面应用与 `dsh web` 共用同一个 profile |
 | Node | `^22.19.0 \|\| >=24.0.0`（仅从源码构建时需要） |
 | 插件 | `0.2.x` |
 
-宿主半声明 `inject: ['llm', 'settings']`；`webServer`、`sessions`、默认模型命名空间都是可选探测，缺失时优雅降级。
+宿主半声明 `inject: ['llm']`（0.1.7 起设置不再是插件注册的命名空间，配置从组合行解析出来）；`webServer`、`sessions`、设置域都是可选探测，缺失时优雅降级。
 
 ## 安装
 
@@ -167,9 +167,9 @@ dsh plugin --profile web remove @xyavid/dsh-prompt-polish
 
 ## 配置
 
-全部配置都在 `prompt-polish` 设置命名空间里，可在 **设置 → 插件配置** 编辑，或直接写 `~/.dsh/settings.yaml`。改动即时生效（`applies: 'live'`）。
+全部配置都在 `prompt-polish` 这条组合层插件行上，可在 **设置 → 插件配置** 编辑，或直接改 profile 的 `cordis.patch.yml` 里这一行的 `config`。0.1.7 起设置页的改动由 dsh 设置域写回 profile patch，插件侧读 schema 里带 `.volatile()` 的稳定引用，所以**保存即生效，不需要重启或重挂载**。
 
-默认值有三层来源，后者覆盖前者：schema 默认值 → `cordis.patch.yml` 里这一行的 `config`（组合层 base）→ 你的设置段。开箱状态下组合层已经钉住了 `enabled`、`temperature`、`maxOutputTokens`、`timeoutMs`、`maxInputChars` 五项，所以即使从不打开设置页，生效的也是下表中的默认值。
+默认值有三层来源，后者覆盖前者：schema 默认值 → `cordis.patch.yml` 里这一行的 `config`（组合层 base）→ 你在设置页里保存的值。开箱状态下组合层已经钉住了 `enabled`、`temperature`、`maxOutputTokens`、`timeoutMs`、`maxInputChars` 五项，所以即使从不打开设置页，生效的也是下表中的默认值。
 
 | 字段 | 默认 | 生效方式 | 说明 |
 |---|---|---|---|
@@ -181,7 +181,7 @@ dsh plugin --profile web remove @xyavid/dsh-prompt-polish
 | `timeoutMs` | `60000` | 下次调用 | 单次调用端到端超时；超时会给出独立文案，而不是笼统的失败 |
 | `systemPrompt` | 空 | 下次调用 | 自定义策略文本；留空用内置策略 |
 | `strategyMode` | `replace-default` | 下次调用 | `replace-default` 整体替换内置策略（内置硬性约束——保留意图、不编造、只输出正文、语言一致——**不会**自动保留）；`extend-default` 追加在内置策略之后，硬性约束继续生效 |
-| `undoWindowMs` | `60000` | 即时 | 撤回入口保留时长（`0` = 不过期）；按钮通过客户端设置镜像读取 |
+| `undoWindowMs` | `60000` | 即时 | 撤回入口保留时长（`0` = 不过期）；按钮通过客户端 `configForms` 镜像读取 |
 
 同样的值也可以写在用户层补丁里，不动插件代码：
 
@@ -213,7 +213,7 @@ dsh plugin --profile web remove @xyavid/dsh-prompt-polish
 | 模型没返回可用文本 | 清洗后为空 → 拒绝（`upstream`）；可重试 |
 | 上游模型失败 | 映射为 `upstream`，供应商原始文本作为悬停细节 |
 | 设置里关闭了插件 | 按钮隐藏；路由返回 `403` |
-| profile 没有 `webServer` | 宿主半只注册设置命名空间并打一行日志——headless profile 不会因此失败 |
+| profile 没有 `webServer` | 宿主半只打一行日志——headless profile 不会因此失败 |
 
 每一条失败路径都保证输入框与你写下的内容一字不差。错误只出现在按钮上（变红 + 悬停文案），插件从不弹窗、也不弹 toast。
 
@@ -241,9 +241,9 @@ dsh plugin --profile web remove @xyavid/dsh-prompt-polish
 ```
 dsh-prompt-polish/
 ├── package.json          dsh.bundle.patch（入层叠）+ dsh.client（浏览器半）+ scripts/exports
-├── cordis.patch.yml      组合层：一行 insert；其 config 即设置命名空间的 base 层
+├── cordis.patch.yml      组合层：一行 insert；其 config 即这条插件行的 base 层
 ├── src/
-│   ├── index.ts          宿主 apply()：设置命名空间 + 路由 + 路由解析 + 错误映射
+│   ├── index.ts          宿主 apply()：配置读取（volatile 引用）+ 路由 + 路由解析 + 错误映射
 │   ├── enhancer.ts       ctx.llm.stream 调用：超时赛跑、取消、终止校验、输出清洗
 │   ├── prompts.ts        内置策略（SYSTEM/USER 模板）+ 三档力度 + 输出清洗
 │   ├── config.ts         schemastery schema、默认值、输入体检
@@ -319,10 +319,10 @@ copy(JSON.stringify(globalThis.__dshPromptPolish))
 | 提示 `优化期间草稿已改动，结果未采用` | 调用期间你编辑了输入框；结果绝不覆盖更新的输入，重新点一次即可 |
 | 提示 `无法确定使用哪个模型：请先在会话里选择模型` | 会话从未选过模型且没有默认模型；在模型菜单里选一次 |
 | 提示 `优化结果在 token 上限处被截断…` | 调大 `maxOutputTokens` 或缩短原文 |
-| 启动时插件加载失败 | 启动输出里有原始栈；常见原因是缺 `lib/` 产物，或组合里没有 `llm` / `settings` |
-| 设置页看不到 prompt-polish | 该 profile 没有设置提供方（`dsh-settings-file`，由 `dsh-base` 提供），或插件层没进 `dsh.profile.bundles` |
+| 启动时插件加载失败 | 启动输出里有原始栈；常见原因：缺 `lib/` 产物、组合里没有 `llm` 服务，或插件自己的 `node_modules` 里 schemastery 仍是被删掉 `.volatile()` 的旧版（0.1.7 需要 3.18.4+，报 `volatile is not a function`） |
+| 设置页看不到 prompt-polish | 该 profile 没有设置提供方（`dsh-client-ui-settings` 提供 `configForms`），或插件层没进 `dsh.profile.bundles` |
 | 按钮在，但调用报供应商错误 | 悬停里是供应商原始信息；通常是 harness 凭据库里的密钥或额度问题 |
-| 改了设置好像没反应 | 命名空间注册为 `applies: 'live'`，保存后下一次调用即生效；只有 bundle 列表变化才需要重启。完全被忽略时检查设置提供方是否存在、`prompt-polish` 段是否合法 YAML |
+| 改了设置好像没反应 | 0.1.7 的 volatile 配置在保存后由 loader 直接写进运行中的引用，下一次调用即生效，无需重启；完全没反应时检查设置页是否真的保存成功（profile patch 里这一行的 `config` 有没有变） |
 | 想看宿主侧发生了什么 | 宿主半每次激活会打一行（`prompt-polish: 已挂载 /api/prompt-polish/optimize`）。桌面应用：`%APPDATA%\DSH Desktop\logs\host\dsh-<日期>.log`；`dsh web`：启动它的终端 |
 
 ## 安全模型
@@ -339,11 +339,11 @@ copy(JSON.stringify(globalThis.__dshPromptPolish))
 | 项 | 说明 |
 |---|---|
 | 每会话单请求 | 客户端同时只允许一次优化；被取消调用的迟到响应按请求 id 丢弃 |
-| 撤回窗口依赖设置服务 | 按钮通过客户端 `settingsScope` 镜像读取 `undoWindowMs`；组合里没有设置服务时静默退回 60 秒 |
+| 撤回窗口依赖设置服务 | 按钮通过客户端 `configForms` 镜像读取 `undoWindowMs`；组合里没有设置域时静默退回 60 秒 |
 | 无上下文感知 | 从不读取会话历史，只优化草稿本身 |
 | chip 一律拒绝 | 含 `/命令` 与 `@引用` 的草稿不做改写，因为填回会毁掉 chip |
 | 路由前缀是硬约束 | 除非你自己补信任校验，否则请把端点保持在 `/api` 下 |
-| 旧版 dsh | 只验证过 `0.1.5-rc.1` 线；更早版本可能没有 `conversation.input.*` 插槽 |
+| 旧版 dsh | 只适配 `0.1.7-rc.1` 线：设置走 schema 的 `.volatile()` 字段 + 客户端 `configForms`。0.1.5 线的 `ctx.settings.register` / `settingsScope` 已被官方删除，本版本不再兼容 |
 
 ## 常见问题
 
@@ -360,7 +360,7 @@ copy(JSON.stringify(globalThis.__dshPromptPolish))
 截断会悄悄改变你的意思。插件选择拒绝，并给出确切计数。
 
 **在 headless / SDK profile 里能用吗？**
-宿主半会激活并注册设置命名空间，为缺少 `webServer` 打一行日志，然后什么都不做——优化是浏览器侧功能。
+宿主半会激活（配置从组合行解析即可用，不需要设置域），为缺少 `webServer` 打一行日志，然后什么都不做——优化是浏览器侧功能。
 
 **支持官方 DeepSeek 路由吗？**
 支持。它走 `ctx.llm`，因此 harness 提供的任何供应商（DeepSeek 官方、OpenAI 兼容网关）都能用。
@@ -381,7 +381,7 @@ copy(JSON.stringify(globalThis.__dshPromptPolish))
 
 ## 致谢
 
-插件遵循 dsh 插件族的约定：一层 bundle 补丁、一个拥有路由与设置命名空间的宿主半、一个只接触 session 作用域标准 props 的浏览器半。内置策略模板刻意逐字保留——其中的语言一致性条款与反例是长期实战总结；要改风格请用 `systemPrompt`，不要删模板里的硬性约束。
+插件遵循 dsh 插件族的约定：一层 bundle 补丁、一个导出 volatile 配置 schema 并拥有路由的宿主半、一个只接触 session 作用域标准 props 的浏览器半。内置策略模板刻意逐字保留——其中的语言一致性条款与反例是长期实战总结；要改风格请用 `systemPrompt`，不要删模板里的硬性约束。
 
 ## 许可
 
