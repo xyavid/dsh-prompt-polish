@@ -37,16 +37,29 @@ function walk(dir) {
 
 /**
  * 计算一组文件的内容哈希（相对路径 + 内容一起入哈希）。
+ *
+ * 路径先归一成 `/` 分隔：Windows 的 `path.join` 产出 `\`，Linux 产出 `/`，
+ * 而同一份源码必须在两个平台算出同一个指纹——否则提交的 `lib/` 只在
+ * 构建它的那个平台上通过 `verify:lib`（换平台必然报 DRIFT）。
  * @param files - 绝对路径列表。
  * @returns 12 位十六进制摘要。
  */
 function contentHash(files) {
   const hash = createHash('sha256')
   for (const file of files) {
-    hash.update(file.slice(root.length))
+    hash.update(relativePath(file))
     hash.update(readFileSync(file))
   }
   return hash.digest('hex').slice(0, 12)
+}
+
+/**
+ * 仓库内相对路径，统一成 `/` 分隔（跨平台指纹稳定的关键）。
+ * @param file - 绝对路径。
+ * @returns 形如 `/src/index.ts` 的相对路径。
+ */
+function relativePath(file) {
+  return file.slice(root.length).replaceAll('\\', '/')
 }
 
 /** 仓库地址（去掉 git+ 前缀与 .git 后缀）；未填写占位符时为空串。 */
