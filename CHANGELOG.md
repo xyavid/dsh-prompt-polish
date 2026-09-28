@@ -4,6 +4,30 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **在 dsh 0.2.0-rc.1 上插件被整包静默跳过**：0.2.0-rc.1 的 app-boot 新增 `evaluatePluginCompatibility()`，它拿 `package.json#peerDependencies` 里所有 `@deepseek-ai/dsh*` 的 range 与运行中的 dsh 版本比对（带 `includePrerelease: true`），不满足就把该 bundle 丢进 `skippedBundles`——异常在 `loadProfileDirectory()` 里被 catch，因此表现为"按钮不见了、也没有报错"。原写法 `^0.1.7-rc.1` 的语义是 `>=0.1.7-rc.1 <0.2.0`，**永远不包含 `0.2.0-rc.1`**，三条 dsh peer 全部不满足。现改为 `^0.1.7-rc.1 || ^0.2.0-rc.1`，同时接纳 0.1.7 线与 0.2.0 线；`dsh.engines.dsh` 同步更新。由 `test/dsh-compat.test.mjs` 与 `docs/compatibility.md` 共同约束。
+- 客户端 bundle 的信封 id 与「被安装的那份 `package.json#name`」不一致时（把 `lib/` 拷进改名后的目录/本地开发副本），dsh 会认为该行从未注册、回退到单文件 URL 把 bundle 二次执行，外壳抛 `client-modules: duplicate factory registration for "@xyavid/dsh-prompt-polish" (bundle executed twice without invalidate?)`，插件客户端半静默不激活。现在由 `test/client-envelope.test.mjs` 与 `docs/compatibility.md`（实测结论 7）共同约束。
+
+### 新增
+
+- `scripts/build.mjs` 支持 `--client-id <name>`（或环境变量 `DSH_PP_CLIENT_ID`）覆盖 `lib/client.js` 信封里注册的模块 id，用于把产物装到改过名的目录/别名下时保持与安装名一致；只影响浏览器半，`lib/index.js` 不变。
+
+### 变更
+
+- 开发与测试基线从 `0.1.7-rc.1` 提到 `0.2.0-rc.1`（`@deepseek-ai/dsh-*` 开发依赖、`@deepseek-ai/cordis` 提到 `4.0.4` 以匹配 0.2.0-rc.1 的 `~4.0.4` peer）。类型断言与全部行为回归现在直接跑在 0.2.0-rc.1 上；接口面核对为 0.1.7 的超集，因此两条线继续同时支持。
+- 开发依赖补 pin `@deepseek-ai/dsh-scope` / `@deepseek-ai/dsh-invariants` 到 `0.2.0-rc.1`：它们是 `dsh-session` / `dsh-scope` 的精确 peer，旧 lockfile 残留会把它们解析成 `0.1.5-rc.1`，pnpm 会报 unmet peer（且让测试环境与真实运行时不一致）。
+
+### 测试
+
+- 新增 `test/client-envelope.test.mjs`：断言提交的 `lib/client.js` 注册的 id 等于 `package.json#name`，并验证 `--client-id` 能为改名安装产出正确产物（且不动宿主半）。
+- 新增 `test/dsh-compat.test.mjs`：复刻 dsh 的 peer 门禁（含 `includePrerelease` 语义），断言每条 `@deepseek-ai/dsh*` peer 与 `dsh.engines.dsh` 都接纳 0.1.7 线与 0.2.0 线、node_modules 里实际装到的版本也被接纳，并用修好之前的 `^0.1.7-rc.1` 复现一次以确保测试确实抓得住这个回归。
+
+### 文档
+
+- `docs/compatibility.md` 增加「0.2.0-rc.1 的插件门禁」一节与「实测结论 9」，并更新「已知边界」里的 dsh 版本行；`CONTRIBUTING.md` 增加对应硬约束；README（中/英）排错表补上"插件在 0.2.0-rc.1 上静默不出现"的排查行。
+- `docs/compatibility.md` 增加「实测结论 7」；`CONTRIBUTING.md` 增加对应硬约束与本地开发说明；README（中/英）排错表补上该报错的排查行。
+
 ### 计划中
 
 - 接入 harness locale 命名空间，让按钮与错误文案支持中英双语。

@@ -1,9 +1,36 @@
 # 接口核对与兼容性
 
 本文记录插件用到的每个官方接口、核对方式与已知的兼容性边界。核对基于 npm 上发布的
-`0.1.7-rc.1` 类型定义，通过 `types/contract.ts` 在编译期断言（`pnpm run typecheck`），
-并在运行时由 `test/host-config.test.mjs`、`test/harness.mjs`、`test/undo-window.test.mjs`
-做行为回归。
+`0.2.0-rc.1` 类型定义，通过 `types/contract.ts` 在编译期断言（`pnpm run typecheck`），
+并在运行时由 `test/host-config.test.mjs`、`test/harness.mjs`、`test/undo-window.test.mjs`、
+`test/dsh-compat.test.mjs` 做行为回归。**0.1.7 线与 0.2.0 线都支持**：0.2.0-rc.1 的接口面是
+0.1.7 的超集（逐文件核对过 `dsh-llm` / `dsh-session` / `dsh-client-ui-conversation` /
+`dsh-client-ui-settings` 的 `.d.ts`，只有新增字段；`dsh-host-webserver`、`dsh-client-ui-slots`、
+`dsh-client-store`、`dsh-client-modules` 逐字节相同）。
+
+## 0.2.0-rc.1 的插件门禁（本次适配的核心）
+
+0.2.0-rc.1 起，app-boot 在装载 profile bundle 前会跑 `evaluatePluginCompatibility()`
+（`dsh-app-boot/lib/index.js`：把 bundle 的 `package.json#peerDependencies` 里所有
+`@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 取出来，与运行中的 dsh 版本比对，
+比对带 `{ includePrerelease: true }`）。任何一条不满足，`loadProfileDirectory()`
+就抛错并把整个 bundle 丢进 `skippedBundles`——**异常在那里被 catch 掉，插件静默消失**。
+
+```js
+// dsh-app-boot 的真实判定（逐字）
+if (requirement.trim() === "" || !semver.satisfies(runtimeVersion, requirement, { includePrerelease: true }))
+  peers[name] = range;
+```
+
+坑在 semver 的预发布规则：**`^0.1.7-rc.1` = `>=0.1.7-rc.1 <0.2.0`，永远不包含 `0.2.0-rc.1`**
+（加不加 `includePrerelease` 都一样）。0.3.0 及以前插件三条 dsh 依赖都写成 `^0.1.7-rc.1`，
+于是在 0.2.0-rc.1 上被整包跳过，表现为"按钮不见了、控制台也没有报错"。
+对策：range 写成 `^0.1.7-rc.1 || ^0.2.0-rc.1`。`test/dsh-compat.test.mjs` 把这条钉进回归，
+并用旧写法复现一次，确保测试真的抓得住。注意 `dsh.engines.dsh` 字段**不参与**这道门禁
+（门禁只读 `peerDependencies`），但它是对外声明，仍需写对。
+
+被跳过时不会打印任何东西；要拿原因可以用 `dsh plugin` 的插件管理器界面，或按官方提示
+给某个精确版本开豁免（`dsh plugin allow-version` / 插件的 `compatibility.json`）。
 
 ## 0.1.7 的设置接口变更（本次适配的核心）
 
@@ -65,6 +92,50 @@
    `@deepseek-ai/schemastery`，Node 从 `lib/` 向上解析——`~/.dsh/dsh-plugin-dev/<plugin>/node_modules`
    里必须是 **3.18.4+**（`.volatile()` 从这一版才有）。0.1.5 时期装的 3.18.2 会让
    `z.boolean().default(true).volatile is not a function` 在挂载时炸掉。
+7. **客户端 bundle 信封里的模块 id 必须等于「被安装的那份 package.json 的 name」**：
+   dsh 的客户端模块图按行 id 建表——`dsh-client-modules` 用 `nearestPackage()` 从加载到的
+   模块向上找最近的 `package.json`，取其 `name` 当行 id，加载器只认这个 id 的 factory
+   （官方客户端编写文档：bundle "registers a lazy factory whose id equals the package name"）。
+   把本仓库的 `lib/` 拷进一个**改过名的副本**（实测：本地开发副本 `package.json#name` 是
+   `dsh-prompt-polish`，产物却是 `@xyavid/dsh-prompt-polish`）时两者不一致，加载器认为该行
+   从未注册 → 回退到单文件 URL **把 bundle 再执行一次** → 外壳抛
+   `client-modules: duplicate factory registration for "@xyavid/dsh-prompt-polish"
+   (bundle executed twice without invalidate?)`，宿主同时报
+   `web boot: 1 entry did not activate` 与 `import failed: could not load "dsh-prompt-polish"`，
+   插件客户端半静默不激活。
+   对策（二选一）：在**被安装的那份目录**里 `pnpm run build`；或用
+   `node scripts/build.mjs --client-id <安装名>`（等价环境变量 `DSH_PP_CLIENT_ID`）为本仓库之外
+   的安装名产出产物。`test/client-envelope.test.mjs` 把这条不变量钉进回归。
+
+8. **`dsh-util-values` 的无损 JSON 判定器只在 V8 上成立（Gecko 上会拒掉每一个普通对象）**：
+   `hasIntrinsicConstructor()` 用 `Function.prototype.toString.call(constructor) ===
+   \`function ${name}() { [native code] }\`` 做"本真原型"证明——这一串是 **V8 的格式**。
+   SpiderMonkey（Firefox/Zen）对原生函数返回的是跨行形式
+   `function Object() {\n    [native code]\n}`，精确比较必然不等，于是
+   `hasPlainObjectPrototype()` 对每个 `JSON.parse` 产物都返回 false，客户端
+   `snapshotChunk()` 对每个 chunk 都抛 `Assistant stream chunk must be losslessly
+   JSON-serializable`，表现为打开**带活跃 attempt 的会话**时固定报
+   `Assistant stream raw chunk must be a lossless JSON object`（值本身完全合法，是判定被
+   引擎格式打断）。本机已就地打补丁（两处，各一行；`dsh` 重装/升级会覆盖）：
+   - `…/@deepseek-ai/dsh-util-values/lib/index.js`（第 18 行，宿主+其他内联源）
+   - `…/@deepseek-ai/dsh-api-session-controller/lib/client.js`（第 599 行，**浏览器实际执行的内联副本**）
+
+   改法：把精确比较换成容忍引擎格式的标记判定
+
+   ```js
+   // 原： === `function ${name}() { [native code] }`
+   /^function\b[\s\S]*\{\s*\[\s*native code\s*\]\s*\}$/.test(Function.prototype.toString.call(constructor))
+   ```
+
+   备份在同名 `.bak`。判定器还有 4 份**宿主侧**副本（`dsh-tools/lib/index.js`、
+   `dsh-tools/lib/types/json-schema.js`、`dsh-cordis-host-runner/lib/index.js`、
+   `dsh-cordis-host-runner/lib/types/guard.js`），宿主是 Node/V8 因而不受影响，未改动。
+
+9. **`@deepseek-ai/dsh*` 的 peer range 必须接纳运行中的 dsh 版本，且预发布版本有坑**：
+   0.2.0-rc.1 的 app-boot 拿 `peerDependencies` 做门禁，不满足就把整个 bundle 静默跳过
+   （见上一节）。`^0.1.7-rc.1` 这类"上一代的 caret"在预发布线之间**不通用**，
+   必须显式写成 `^0.1.7-rc.1 || ^0.2.0-rc.1`。写成本插件这种"支持两条线"的多段 range 时，
+   每一段都要能被对应代的运行时满足。
 
 ## 客户端服务与 `dsh.client.inject`
 
@@ -87,4 +158,4 @@
 | 上下文感知 | 不读取会话历史，只优化当前草稿（默认更省更可预期） |
 | 输入含 `/命令`、`@引用` | 直接拒绝（结构化片段不适合整体改写） |
 | 只读附件 | 只有附件、没有正文时按空输入拒绝 |
-| dsh 版本 | 依赖 0.1.7 的 volatile 设置面（`.volatile()`）与客户端 `configForms`；0.1.5 线不支持（`ctx.settings.register` 已被删除），更早版本未验证 |
+| dsh 版本 | 同时支持 **0.1.7 线**（`0.1.7-rc.1` / `0.1.7-rc.2`）与 **0.2.0 线**（`0.2.0-rc.1`）；`peerDependencies` 写成 `^0.1.7-rc.1 \|\| ^0.2.0-rc.1`，0.2.0-rc.1 的 app-boot 门禁据此放行。依赖 0.1.7 的 volatile 设置面（`.volatile()`）与客户端 `configForms`，这两样 0.2.0-rc.1 未变；0.1.5 线不支持（`ctx.settings.register` 已被删除），更早版本未验证 |

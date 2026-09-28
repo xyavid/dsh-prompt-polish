@@ -9,6 +9,13 @@
  * 产物头部写入【源码内容哈希】：内容不变 → 产物逐字节一致（CI 可校验提交的 lib/
  * 是否与 src/ 同步）；内容一变 → 哈希变 → 服务端给 bundle 的 rev 变 → 浏览器不会
  * 命中旧缓存。刻意不用时间戳：时间戳会让每次构建都不同，无法做产物校验。
+ *
+ * `lib/client.js` 信封里的模块 id 默认取本包的 `package.json#name`，可用
+ * `--client-id <name>`（或环境变量 `DSH_PP_CLIENT_ID`）覆盖——dsh 的客户端模块图按
+ * **安装的那份 package.json 的 name** 建行，把 `lib/` 拷进一个改过名的副本时必须用
+ * 那个副本的名字构建，否则外壳会报
+ * `client-modules: duplicate factory registration for "<本仓库名>"`（见
+ * docs/compatibility.md 的「实测结论」7）。
  */
 import { context } from 'esbuild'
 import { createHash } from 'node:crypto'
@@ -19,6 +26,29 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const watch = process.argv.includes('--watch')
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+
+/**
+ * 读一个可带值的启动参数：`--name value` 或 `--name=value`。
+ * @param name - 参数名（含前缀 `--`）。
+ * @returns 参数值；未出现时为 undefined。
+ */
+function option(name) {
+  const inline = process.argv.find((arg) => arg.startsWith(`${name}=`))
+  if (inline !== undefined) return inline.slice(name.length + 1)
+  const index = process.argv.indexOf(name)
+  return index === -1 ? undefined : process.argv[index + 1]
+}
+
+/**
+ * `lib/client.js` 信封里注册的模块 id：默认本包名，可用 `--client-id` /
+ * `DSH_PP_CLIENT_ID` 覆盖成**安装这份 lib/ 的那个包的名字**。
+ */
+const requestedId = process.env.DSH_PP_CLIENT_ID ?? option('--client-id') ?? pkg.name
+if (typeof requestedId !== 'string' || requestedId.trim() === '') {
+  console.error('[dsh-prompt-polish] --client-id 需要一个非空字符串（安装这份 lib/ 的包的 package.json name）')
+  process.exit(1)
+}
+const clientId = requestedId.trim()
 
 /**
  * 递归收集目录下所有文件（按路径排序，保证哈希稳定）。
@@ -105,7 +135,7 @@ const clientOptions = {
   // 发布自查用：把仓库地址编进产物；源码检出未替换占位符时是空串。
   define: { __DSH_PP_REPO_URL__: JSON.stringify(repoUrl) },
   banner: {
-    js: `// source-hash ${clientHash}\nwindow.__ModuleLoader__.load({\n\tid: ${JSON.stringify(pkg.name)},\n\tfactory: (require) => {\n\t\tvar module = { exports: {} };\n\t\tvar exports = module.exports;\n\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });\n`,
+    js: `// source-hash ${clientHash}\nwindow.__ModuleLoader__.load({\n\tid: ${JSON.stringify(clientId)},\n\tfactory: (require) => {\n\t\tvar module = { exports: {} };\n\t\tvar exports = module.exports;\n\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });\n`,
   },
   footer: { js: '\n\t\treturn module.exports;\n\t}\n});\n' },
 }
@@ -122,4 +152,7 @@ if (watch) {
   await host.dispose()
   await client.dispose()
   console.log(`[dsh-prompt-polish] built lib/index.js (${hostHash}) + lib/client.js (${clientHash})`)
+  if (clientId !== pkg.name) {
+    console.log(`[dsh-prompt-polish] lib/client.js 注册的 id = ${clientId}（安装名；本包名是 ${pkg.name}）`)
+  }
 }

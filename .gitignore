@@ -11,6 +11,7 @@ Thumbs.db
 
 # 产物同步校验的临时目录
 .verify-lib-*/
+.verify-envelope-*/
 
 # 一次性调试脚本（正式回归只保留 test/harness.mjs）
 test/probe*.mjs

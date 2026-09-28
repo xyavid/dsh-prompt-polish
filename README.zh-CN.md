@@ -320,6 +320,8 @@ copy(JSON.stringify(globalThis.__dshPromptPolish))
 | 提示 `无法确定使用哪个模型：请先在会话里选择模型` | 会话从未选过模型且没有默认模型；在模型菜单里选一次 |
 | 提示 `优化结果在 token 上限处被截断…` | 调大 `maxOutputTokens` 或缩短原文 |
 | 启动时插件加载失败 | 启动输出里有原始栈；常见原因：缺 `lib/` 产物、组合里没有 `llm` 服务，或插件自己的 `node_modules` 里 schemastery 仍是被删掉 `.volatile()` 的旧版（0.1.7 需要 3.18.4+，报 `volatile is not a function`） |
+| 控制台报 `client-modules: duplicate factory registration for "…"（bundle executed twice without invalidate?）` | 被安装的那份 `package.json#name` 与 `lib/client.js` 里注册的模块 id 不一致（典型：把 `lib/` 拷进了改名后的目录或本地开发副本）。在被安装的那份目录里 `pnpm run build`，或 `node scripts/build.mjs --client-id <安装名>` 后刷新页面 |
+| 在 dsh **0.2.0-rc.1** 上按钮完全不出现，且控制台**没有任何报错** | 0.2.0-rc.1 起 app-boot 用 `peerDependencies` 里的 `@deepseek-ai/dsh*` range 做门禁，不满足就把整个 bundle 丢进 `skippedBundles`（异常被 catch，所以静默）。0.3.0 及以前的 range 是 `^0.1.7-rc.1`，语义为 `>=0.1.7-rc.1 <0.2.0`，**永远不包含 `0.2.0-rc.1`**，整包被跳过。升级到 0.3.1+（range 为 `^0.1.7-rc.1 \|\| ^0.2.0-rc.1`）；仍用 0.3.0 时可在插件管理器里给 `@xyavid/dsh-prompt-polish@0.3.0` 开精确版本豁免应急 |
 | 设置页看不到 prompt-polish | 该 profile 没有设置提供方（`dsh-client-ui-settings` 提供 `configForms`），或插件层没进 `dsh.profile.bundles` |
 | 按钮在，但调用报供应商错误 | 悬停里是供应商原始信息；通常是 harness 凭据库里的密钥或额度问题 |
 | 改了设置好像没反应 | 0.1.7 的 volatile 配置在保存后由 loader 直接写进运行中的引用，下一次调用即生效，无需重启；完全没反应时检查设置页是否真的保存成功（profile patch 里这一行的 `config` 有没有变） |

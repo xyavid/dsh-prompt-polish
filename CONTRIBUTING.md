@@ -8,6 +8,8 @@ pnpm run check      # typecheck + 离线回归 + 构建
 ```
 
 改动后需要：`pnpm run build` → 重启 dsh web 进程 → 刷新页面。
+如果本地开发副本的 `package.json#name` 与本仓库不同（例如装成 `dsh-prompt-polish`），
+构建要用 `node scripts/build.mjs --client-id <那个名字>`，否则外壳会报下面的约束 7。
 
 ## 目录约定
 
@@ -33,6 +35,18 @@ pnpm run check      # typecheck + 离线回归 + 构建
    保持"逐个尝试候选插槽"的结构。
 6. **模型输出必须校验终止原因**：`error` / `aborted` / `max-tokens` 一律判失败，
    绝不把半截提示词写回输入框。
+7. **客户端 bundle 的信封 id 必须等于被安装的那份 `package.json` 的 `name`**：
+   dsh 按这个 id 建客户端模块图的行（`nearestPackage()` 取安装目录里最近的 package.json）。
+   两者不一致时加载器会回退到单文件 URL 二次执行 bundle，外壳抛
+   `client-modules: duplicate factory registration for "…"（bundle executed twice without
+   invalidate?）`。装到别的名字下请 `--client-id <那个名字>`，或直接在安装目录里构建。
+8. **`@deepseek-ai/dsh*` 的 peer range 必须接纳运行中的 dsh 版本**：dsh 0.2.0-rc.1 的
+   app-boot 用 `peerDependencies` 做门禁（`evaluatePluginCompatibility`），不满足就把整个
+   bundle 丢进 `skippedBundles`——**静默跳过，控制台没有报错**。坑在预发布版本：
+   `^0.1.7-rc.1` = `>=0.1.7-rc.1 <0.2.0`，**永远不包含 `0.2.0-rc.1`**，加不加
+   `includePrerelease` 都一样。支持多条 dsh 线时必须显式写全，例如
+   `^0.1.7-rc.1 || ^0.2.0-rc.1`；升级 `devDependencies` 里的 dsh 版本时，务必同步放宽
+   `peerDependencies`，并让 `pnpm run check`（含 `test/dsh-compat.test.mjs`）通过。
 
 ## 提交前
 
