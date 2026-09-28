@@ -1,6 +1,6 @@
 {
   "name": "@xyavid/dsh-prompt-polish",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "dsh Web 插件：在输入框模型名左侧加一个小星星按钮，一键把当前草稿交给模型改写成结构化提示词，可一键撤回。",
   "type": "module",
   "main": "lib/index.js",

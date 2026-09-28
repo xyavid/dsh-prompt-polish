@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-09-28
+
+适配 dsh `0.2.0-rc.1`：官方新增的插件门禁会按 `peerDependencies` 判定，而"上一代的 caret range"在预发布线之间不通用，导致插件在 0.2.0-rc.1 上被**整包静默跳过**（按钮不出现且没有任何报错）。本版放宽 dsh peer range，同时接纳 0.1.7 线与 0.2.0 线；接口面本身无需改动，`lib/` 逐字节不变。
+
 ### 修复
 
 - **在 dsh 0.2.0-rc.1 上插件被整包静默跳过**：0.2.0-rc.1 的 app-boot 新增 `evaluatePluginCompatibility()`，它拿 `package.json#peerDependencies` 里所有 `@deepseek-ai/dsh*` 的 range 与运行中的 dsh 版本比对（带 `includePrerelease: true`），不满足就把该 bundle 丢进 `skippedBundles`——异常在 `loadProfileDirectory()` 里被 catch，因此表现为"按钮不见了、也没有报错"。原写法 `^0.1.7-rc.1` 的语义是 `>=0.1.7-rc.1 <0.2.0`，**永远不包含 `0.2.0-rc.1`**，三条 dsh peer 全部不满足。现改为 `^0.1.7-rc.1 || ^0.2.0-rc.1`，同时接纳 0.1.7 线与 0.2.0 线；`dsh.engines.dsh` 同步更新。由 `test/dsh-compat.test.mjs` 与 `docs/compatibility.md` 共同约束。
