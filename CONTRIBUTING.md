@@ -7,6 +7,13 @@ pnpm install
 pnpm run check      # typecheck + 离线回归 + 构建
 ```
 
+> **同时用 Windows 和 WSL 开发时**：这个 checkout 的两条路径（`D:\dsh-prompt-polish`
+> 与 `/mnt/d/dsh-prompt-polish`）指向同一份目录，两边共用一个 `node_modules`。
+> `pnpm-workspace.yaml` 的 `supportedArchitectures` 已声明同时装 win32 与 linux 的 x64
+> 产物；删掉它后装的那一侧会报
+> `You installed esbuild for another platform than the one you're currently using`。
+> 改动依赖后建议两边各跑一次 `pnpm run check`。
+
 改动后需要：`pnpm run build` → 重启 dsh web 进程 → 刷新页面。
 如果本地开发副本的 `package.json#name` 与本仓库不同（例如装成 `dsh-prompt-polish`），
 构建要用 `node scripts/build.mjs --client-id <那个名字>`，否则外壳会报下面的约束 7。

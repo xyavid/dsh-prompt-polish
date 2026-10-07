@@ -1,6 +1,17 @@
 # 只放行 esbuild 的安装脚本（它需要下载平台二进制）。
 allowBuilds:
   esbuild: true
+# 这个 checkout 同时被 Windows 和 WSL 使用（D:\dsh-prompt-polish 与
+# /mnt/d/dsh-prompt-polish 是同一份目录），两边共用一个 node_modules。
+# esbuild 的平台二进制是排他的——只装当前平台那份，另一侧就会报
+# "You installed esbuild for another platform than the one you're currently using"。
+# 显式声明两个平台，让 pnpm 一次性把 win32 与 linux 的 x64 产物都装上。
+supportedArchitectures:
+  os:
+    - win32
+    - linux
+  cpu:
+    - x64
 minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-brand@0.1.5-rc.1'
   - '@deepseek-ai/dsh-client-store@0.1.5-rc.1'

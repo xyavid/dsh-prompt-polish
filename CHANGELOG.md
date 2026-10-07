@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 变更
+
+- 开发环境：`pnpm-workspace.yaml` 声明 `supportedArchitectures`（win32 + linux，x64），使 Windows 与 WSL 共用同一份 checkout 时 `node_modules` 里同时具备两个平台的 esbuild 产物。此前只有构建它的那一侧可用，另一侧跑 `pnpm run check` 会报 `You installed esbuild for another platform than the one you're currently using`。只影响本地安装结果，不进 npm 包。
+
 ## [0.3.1] — 2026-09-28
 
 适配 dsh `0.2.0-rc.1`：官方新增的插件门禁会按 `peerDependencies` 判定，而"上一代的 caret range"在预发布线之间不通用，导致插件在 0.2.0-rc.1 上被**整包静默跳过**（按钮不出现且没有任何报错）。本版放宽 dsh peer range，同时接纳 0.1.7 线与 0.2.0 线；接口面本身无需改动，`lib/` 逐字节不变。
