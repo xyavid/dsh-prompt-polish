@@ -111,18 +111,24 @@ dsh plugin --profile web add link:C:\path\to\dsh-prompt-polish
 **从 tarball 安装**。不需要构建环境：
 
 ```bash
-pnpm pack                        # 产出 xyavid-dsh-prompt-polish-0.2.0.tgz
-dsh plugin --profile web add ./xyavid-dsh-prompt-polish-0.2.0.tgz
+pnpm pack                        # 产出 xyavid-dsh-prompt-polish-<version>.tgz
+dsh plugin --profile web add ./xyavid-dsh-prompt-polish-<version>.tgz
 ```
 
-**从 GitHub 直装**。本包声明了 `prepare` 脚本，而 pnpm ≥ 10 默认拦截依赖的构建脚本，因此 git 安装必须先放行，
-否则 pnpm 会以 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` 中止。在 profile 目录的 `pnpm-workspace.yaml`
-（`$DSH_HOME/profiles/web/`）中加入：
+**从 GitHub 直装**。更省事的是从 npm 装——发布包自带 `lib/`，不会触发 `prepare`，也就没有下面这道坎。
+
+本包声明了 `prepare` 脚本，而 pnpm ≥ 10 默认拦截依赖的构建脚本，因此 git 安装必须先放行，
+否则 pnpm 会以 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` 中止。在 profile 目录的
+`pnpm-workspace.yaml`（`$DSH_HOME/profiles/web/`）里放行：
 
 ```yaml
-onlyBuiltDependencies:
-  - "@xyavid/dsh-prompt-polish"
+allowBuilds:
+  '@xyavid/dsh-prompt-polish@https://codeload.github.com/xyavid/dsh-prompt-polish/tar.gz/<commit>': true
 ```
+
+**key 直接照抄 pnpm 报错信息里给出的那一行**：git / tarball 依赖的 key 含解析后的 commit，
+换 ref 后 key 也随之变化，写错不会报错、只会静默不生效（早期 pnpm 的 `onlyBuiltDependencies`
+是另一个键，在 10.29 上已经不起作用）。
 
 ```bash
 dsh plugin --profile web add github:xyavid/dsh-prompt-polish

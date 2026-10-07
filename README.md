@@ -114,19 +114,26 @@ dsh plugin --profile web add link:C:\path\to\dsh-prompt-polish
 **From a tarball.** No build environment needed:
 
 ```bash
-pnpm pack                        # produces xyavid-dsh-prompt-polish-0.2.0.tgz
-dsh plugin --profile web add ./xyavid-dsh-prompt-polish-0.2.0.tgz
+pnpm pack                        # produces xyavid-dsh-prompt-polish-<version>.tgz
+dsh plugin --profile web add ./xyavid-dsh-prompt-polish-<version>.tgz
 ```
 
-**From GitHub.** The package declares a `prepare` script, and pnpm >= 10 blocks dependency build
-scripts by default, so a git install has to be allowlisted first; without it pnpm aborts with
+**From GitHub.** Installing from npm is easier — the published tarball already ships `lib/`, so it never
+runs `prepare` and the gate below does not apply.
+
+The package declares a `prepare` script, and pnpm >= 10 blocks dependency build scripts by default,
+so a git install has to be allowlisted first; without it pnpm aborts with
 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`. Add this to the profile's `pnpm-workspace.yaml`
 (`$DSH_HOME/profiles/web/`):
 
 ```yaml
-onlyBuiltDependencies:
-  - "@xyavid/dsh-prompt-polish"
+allowBuilds:
+  '@xyavid/dsh-prompt-polish@https://codeload.github.com/xyavid/dsh-prompt-polish/tar.gz/<commit>': true
 ```
+
+**Copy the key verbatim from what pnpm printed**: a git/tarball dependency's key carries the resolved
+commit, so it changes whenever you change the ref, and a wrong key fails silently instead of erroring.
+(The older `onlyBuiltDependencies` key does nothing on pnpm 10.29.)
 
 ```bash
 dsh plugin --profile web add github:xyavid/dsh-prompt-polish

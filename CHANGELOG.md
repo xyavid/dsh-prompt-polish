@@ -6,7 +6,12 @@
 
 ### 变更
 
+- 开发与测试基线升到 dsh `0.2.0-rc.2`（9 个 `@deepseek-ai/dsh-*` 开发依赖；cordis 仍是 `~4.0.4`、schemastery 仍是 `3.18.4`，与 rc.2 的要求一致）。`peerDependencies` 里的 `^0.1.7-rc.1 || ^0.2.0-rc.1` 本就覆盖 rc.2，所以对外声明无需改动；typecheck（对官方 `.d.ts` 断言）与全部行为回归在 rc.2 上通过，`lib/` 逐字节不变。
 - 开发环境：`pnpm-workspace.yaml` 声明 `supportedArchitectures`（win32 + linux，x64），使 Windows 与 WSL 共用同一份 checkout 时 `node_modules` 里同时具备两个平台的 esbuild 产物。此前只有构建它的那一侧可用，另一侧跑 `pnpm run check` 会报 `You installed esbuild for another platform than the one you're currently using`。只影响本地安装结果，不进 npm 包。
+
+### 文档
+
+- README（中/英）修正 GitHub 直装的放行写法：旧文档写的 `onlyBuiltDependencies` 是 pnpm 早期的键名，10.29 已改用 `allowBuilds`，而且 git / tarball 依赖的 key 含解析后的 commit（要照抄 pnpm 报错信息里给出的那一行）——写错不会报错，只会静默不生效、安装继续被拦。顺带把 `pnpm pack` 示例里过期的 `0.2.0` 文件名换成 `<version>`。
 
 ## [0.3.1] — 2026-09-28
 
